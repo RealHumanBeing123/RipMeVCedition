@@ -1,6 +1,7 @@
 # RipMe Vibe Coded Edition
 
 Hi this is a ripme fork where I vibecoded a fix for the famous 403 error which really annoyed me when trying to download stuff.
+## DO NOT CLICK THE UPDATE BUTTON WITHIN THE SOFTWARE OR ELSE IT CHANGES TO THE REGULAR VERSION OF RIPME WITHOUT THiS FIX OF MINE. 
 
 [Here's the link to the original ripme page](https://github.com/RipMeApp/ripme)
 [![Licensed under the MIT License](https://img.shields.io/badge/License-MIT-blue.svg)](/LICENSE.txt)
