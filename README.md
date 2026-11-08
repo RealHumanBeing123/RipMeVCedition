@@ -1,10 +1,10 @@
-# RipMe
+# RipMe Vibe Coded Edition
 
+Hi this is a ripme fork where I vibecoded a fix for the famous 403 error which really annoyed me when trying to download stuff.
+
+[Here's the link to the original ripme page](https://github.com/RipMeApp/ripme)
 [![Licensed under the MIT License](https://img.shields.io/badge/License-MIT-blue.svg)](/LICENSE.txt)
-[![Join the chat at https://gitter.im/RipMeApp/Lobby](https://badges.gitter.im/RipMeApp/Lobby.svg)](https://gitter.im/RipMeApp/Lobby?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
-[![Subreddit](https://img.shields.io/badge/discuss-on%20reddit-blue.svg)](https://www.reddit.com/r/ripme/)
-![alt Badge Status](https://github.com/ripmeapp/ripme/actions/workflows/gradle.yml/badge.svg)
-[![Coverage Status](https://coveralls.io/repos/github/RipMeApp/ripme/badge.svg?branch=main)](https://coveralls.io/github/RipMeApp/ripme?branch=main)
+[the How To Run wiki](https://github.com/ripmeapp/ripme/wiki/How-To-Run-RipMe).
 
 ## About
 
@@ -19,52 +19,15 @@ Download `ripme.jar` from the [latest release](https://github.com/ripmeapp/ripme
 
 ## Minimum Requirements
 
-Requires Java 21 or later to run. RipMe has been tested on and is confirmed working on Windows, Linux, and Mac.
+Requires Java 25 or later to run. RipMe has been tested on and is confirmed working on Windows, Linux, and Mac.
 
-Java 21 is the most modern possible Java version that allows us to support the most platforms; it's the default JDK on current Debian stable. See [thread](https://github.com/RipMeApp/ripme/pull/2057#issuecomment-2571472016) and [issue #2055](https://github.com/RipMeApp/ripme/issues/2055).
+Java 27 is the most modern possible Java version that allows us to support the most platforms; it's the default JDK on current Debian stable. S
 
 ## Supported Sites
-
 Jump to:
 - [List of Supported Sites](https://github.com/RipMeApp/ripme?tab=readme-ov-file#list-of-supported-sites)
-- [Site Not Supported?](https://github.com/RipMeApp/ripme?tab=readme-ov-file#site-not-supported)
+If the site that you want isn't supported then open one of those support ticket thingies on my fork and I'll try to figure out how to add it.
 
-## Recent development updates
-
-- The current active development repo for RipMe is located at [ripmeapp/ripme](https://github.com/ripmeapp/ripme/).
-- Note: For a while, the ripmeapp/ripme repo was inactive, but development continued at ripmeapp2/ripme.
-- Now, maintainers have been updated and development has been rejoined with ripmeapp/ripme where it will continue.
-- You may find a number of stale issues on ripmeapp/ripme and/or on ripmeapp2/ripme until everything is merged back together and statuses are updated.
-
-## Maintainers
-
-RipMe has been maintained with ♥️ and in our limited free time by the following
-people, with current expected activity level marked by color of the indicator:
-
-- **[@MetaPrime](https://github.com/metaprime)** 🟡 (2025–present)
-- **[@soloturn](https://github.com/soloturn)** 🟡 (2021–present)
-- **[@cyian-1756](https://github.com/cyian-1756)** 🟥 (2017–2020)
-- **[@kevin51jiang](https://github.com/kevin51jiang)** 🟥 (2017–2018)
-- **[@MetaPrime](https://github.com/metaprime)** 🟡 (2016–2017)
-- and its original creator, **[@4pr0n](https://github.com/4pr0n)** 🟥 (2014–2016)
-
-If you'd like to become a maintainer, reach out on https://gitter.im/RipMeApp/Lobby and ask an active maintainer to be added to the team.
-
-## Contact
-
-Chat with the team and community on [gitter](https://gitter.im/RipMeApp/Lobby) and [reddit.com/r/ripme](https://www.reddit.com/r/ripme/)
-
-## Version Numbers
-
-The version number like `ripme-1.7.94-17-2167aa34-feature_auto_release.jar` contains a release number (`1.7.94`), given by
-a person, the number of commits since this version (`17`). The commit SHA (`2167aa34`) uniquely references the
-source code ripme was built from. If it is not built from the main branch, the branch name (`feature/auto-release`) is
-given.
-
-Note that this follows the Semantic Versioning spec (see https://semver.org/),
-and uses the feature of the format that adds extra data after the `-` to
-provide helpful context so that every commit on every branch has a dintinct
-semver version associated with it.
 
 ## Installation
 
@@ -103,20 +66,12 @@ The list of supported rippers includes:
 - flickr
 - photobucket
 - reddit
-- redgifs
-- motherless
-- imagefap
-- seenive
-- 8muses
 - deviantart (currently broken by major changes to the site)
-- xhamster
-- xvideos
 - ... and [more](https://github.com/ripmeapp/ripme/wiki/Supported-Sites)!
 
 ## Sites Answering "Status Code 403"
 
-Some sites refuse requests that do not carry the session cookies of a logged-in browser. RipMe
-can borrow those cookies from the browser you already use:
+Some sites refuse requests that do not carry the session cookies of a logged-in browser. RipMe can borrow those cookies from the browser you already use:
 
 1. Log in to the site in Firefox, Edge, Chrome or Brave.
 2. In RipMe open *Configuration → Site cookies...*, enter the domain (for example `reddit.com`)
@@ -139,14 +94,6 @@ Support by browser:
 If your browser cannot be read, use Firefox for the login, or copy the `Cookie` request header by
 hand as described in the Site cookies dialog.
 
-## Site Not Supported?
-
-Request support for more sites by adding a comment to [this Github issue](https://github.com/RipMeApp/ripme/issues/2068).
-
-If you're a developer, you can add your own Ripper by following the wiki guide:
-[How To Create A Ripper for HTML Websites](https://github.com/ripmeapp/ripme/wiki/How-To-Create-A-Ripper-for-HTML-websites).
-
-# Maintainers
 
 ## Compiling & Building
 
@@ -230,11 +177,4 @@ the following combinations of tags:
 ./gradlew testAll --tests ChanRipperTest --info
 ```
 
-Please note that some tests may fail as sites change and our rippers
-become out of date. Start by building and testing a released version
-of RipMe and then ensure that any changes you make do not cause more
-tests to break.
-
-## Maintainers: How to Publish a New Release
-
-See wiki: [How to Make a New Ripme Release](https://github.com/RipMeApp/ripme/wiki/How-to-make-a-new-ripme-release)
+Please note that some tests may fail as sites change and our rippers become out of date. Start by building and testing a released version of RipMe and then ensure that any changes you make do not cause more tests to break.
