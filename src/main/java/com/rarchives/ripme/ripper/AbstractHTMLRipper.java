@@ -153,6 +153,8 @@ public abstract class AbstractHTMLRipper extends AbstractRipper {
             // If hasASAPRipping() returns true then the ripper will handle downloading the files
             // if not it's done in the following block of code
             if (!hasASAPRipping()) {
+                // Ignore blank addresses a ripper could not extract from the page
+                imageURLs.removeIf(u -> u == null || u.isBlank());
                 // Remove all but 1 image
                 if (isThisATest()) {
                     while (imageURLs.size() > 1) {
@@ -167,7 +169,14 @@ public abstract class AbstractHTMLRipper extends AbstractRipper {
                 for (String imageURL : imageURLs) {
                     imageIndex += 1;
                     logger.debug("Found image url #" + imageIndex + ": '" + imageURL + "'");
-                    downloadURL(new URI(imageURL).toURL(), imageIndex);
+                    URI imageUri = new URI(imageURL.trim());
+                    if (!imageUri.isAbsolute() && !doc.location().isEmpty()) {
+                        imageUri = new URI(doc.location()).resolve(imageUri);
+                    }
+                    if (!imageUri.isAbsolute()) {
+                        throw new IOException("Image address is not absolute: '" + imageURL + "' (page " + doc.location() + ")");
+                    }
+                    downloadURL(imageUri.toURL(), imageIndex);
                     if (isStopped() || isThisATest()) {
                         break;
                     }

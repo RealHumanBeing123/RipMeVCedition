@@ -4,7 +4,9 @@ import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -119,12 +121,38 @@ public class NhentaiRipper extends AbstractHTMLRipper {
 
     @Override
     public List<String> getURLsFromPage(Document page) {
-        List<String> imageURLs = new ArrayList<>();
-        Elements thumbs = page.select("a.gallerythumb > img");
+        // Set: lazy-loaded thumbnails are sometimes repeated inside <noscript> blocks
+        Set<String> imageURLs = new LinkedHashSet<>();
+        Elements thumbs = page.select("a.gallerythumb img");
         for (Element el : thumbs) {
-            imageURLs.add(el.attr("data-src").replaceAll("://t", "://i").replaceAll("t\\.", "."));
+            String thumb = firstUsableImageUrl(el);
+            if (thumb == null) {
+                logger.warn("Could not find an image address in: {}", el.outerHtml());
+                continue;
+            }
+            imageURLs.add(thumb.replaceAll("://t", "://i").replaceAll("t\\.", "."));
         }
-        return imageURLs;
+        return new ArrayList<>(imageURLs);
+    }
+
+    /**
+     * The thumbnail address may be in data-src (lazy loading) or src, and may be relative or
+     * protocol-relative ("//t3.nhentai.net/..."). Returns an absolute address or null.
+     */
+    private static String firstUsableImageUrl(Element img) {
+        for (String attr : new String[] { "data-src", "data-original", "data-lazy-src", "src" }) {
+            String value = img.absUrl(attr);
+            if (value.isEmpty()) {
+                String raw = img.attr(attr).trim();
+                if (raw.startsWith("//")) {
+                    value = "https:" + raw;
+                }
+            }
+            if (!value.isEmpty() && !value.startsWith("data:")) {
+                return value;
+            }
+        }
+        return null;
     }
 
     @Override
