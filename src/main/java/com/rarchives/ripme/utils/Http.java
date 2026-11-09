@@ -112,7 +112,7 @@ public class Http {
             if (!cookieStr.equals("")) {
                 cookiesParsed = RipUtils.getCookiesFromString(cookieStr.trim());
             }
-        } catch (MalformedURLException | URISyntaxException e) {
+        } catch (MalformedURLException | URISyntaxException | IllegalArgumentException e) {
             logger.warn("Parsing url " + u + " while getting cookies", e);
         }
 

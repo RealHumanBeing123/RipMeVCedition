@@ -199,7 +199,8 @@ class DownloadFileThread implements Runnable {
                         redirected = true;
                     }
                     String location = huc.getHeaderField("Location");
-                    url = new URI(location).toURL(); // TODO fix redirect with TokenedUrlGetter
+                    // The Location header may be relative (e.g. "/login" or "../file.jpg"); resolve it against the current URL.
+                    url = url.toURI().resolve(location).toURL(); // TODO fix redirect with TokenedUrlGetter
                     logger.debug("Redirect status code {} - redirect to {}", statusCode, location);
                     continue; // retry
                 }
