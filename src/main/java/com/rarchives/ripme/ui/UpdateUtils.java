@@ -30,7 +30,8 @@ public class UpdateUtils {
     private static final Logger logger = LogManager.getLogger(UpdateUtils.class);
     // do not update the default version without adjusting the unit test. the real version comes from METAINF.MF
     private static final String DEFAULT_VERSION = "1.7.94-10-b6345398";
-    private static final String REPO_NAME = "ripmeapp/ripme";
+    // Updates come from this fork only (never from the upstream ripme repository).
+    private static final String REPO_NAME = "RealHumanBeing123/RipMeVCedition";
     private static final String updateJsonURL = "https://raw.githubusercontent.com/" + REPO_NAME + "/main/ripme.json";
     private static final Path newFile = Paths.get("ripme.jar.new");
     private static Path mainFile;
@@ -48,7 +49,7 @@ public class UpdateUtils {
 
     private static String getUpdateJarURL(String latestVersion) {
         // this works with a tag created in github, and thus download URLs like:
-        // https://github.com/ripmeapp2/ripme/releases/download/2.0.4/ripme-2.0.4-12-487e38cc.jar
+        // https://github.com/RealHumanBeing123/RipMeVCedition/releases/download/<version>/ripme-<version>.jar
         return "https://github.com/"
                 + REPO_NAME
                 + "/releases/download/"
