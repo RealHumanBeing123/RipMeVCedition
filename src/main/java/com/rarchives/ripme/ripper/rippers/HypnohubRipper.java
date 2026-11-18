@@ -69,7 +69,7 @@ public class HypnohubRipper extends AbstractHTMLRipper {
             return src;
         }
         // Fallback to original image link
-        Element origLink = doc.selectFirst("a:matchesOwn(^Original image$");
+        Element origLink = doc.selectFirst("a:matchesOwn(^Original image$)");
         if (origLink != null) {
             String href = origLink.attr("href");
             if (href.startsWith("//"))
@@ -107,7 +107,7 @@ public class HypnohubRipper extends AbstractHTMLRipper {
                 return "https://hypnohub.net" + src;
             return src;
         }
-        Element origLink = doc.selectFirst("a:matchesOwn(^Original image$");
+        Element origLink = doc.selectFirst("a:matchesOwn(^Original image$)");
         if (origLink != null) {
             String href = origLink.attr("href");
             if (href.startsWith("//"))
