@@ -82,18 +82,6 @@ Some sites do not work at all, this is either because of the aforementioned API 
    
 3. Open ripme located in ```\RipMeVCedition-main\build\libs```
 
-## Compiling & Building (skipping the false update)
-
-1. Download and unzip the folder to a place that makes you happy.
-   
-2. use CD for the place that you put it
-   
-3. Run the following to skip the false update
-   
- ```gradlew.bat build -x test -PcustomVersion=2.1.20-14-5a3070e4```
-
-This just adds the current version to the build command so it tells the compiler that it's already the latest version and everything of that sort.
-
 ## Compiling & Building (the hard way)
 
 1. Download and unzip the folder to a place that makes you happy.
