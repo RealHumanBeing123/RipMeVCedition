@@ -76,14 +76,58 @@ public class TumblrRipper extends AlbumRipper {
         }
     }
 
+    private static final List<String> BUILT_IN_KEYS = Arrays.asList("JFNLu3CbINQjRdUvZibXW9VpSEVYYtiPJ86o8YmvgLZIoKyuNX",
+            "FQrwZMCxVnzonv90rgNUJcAk4FpnoS0mYuSuGYqIpM2cFgp9L4",
+            "qpdkY6nMknksfvYAhf2xIHp0iNRLkMlcWShxqzXyFJRxIsZ1Zz");
+    private static int builtInIndex = -1;
+
     private static String pickRandomApiKey() {
-        final List<String> APIKEYS = Arrays.asList("JFNLu3CbINQjRdUvZibXW9VpSEVYYtiPJ86o8YmvgLZIoKyuNX",
-                "FQrwZMCxVnzonv90rgNUJcAk4FpnoS0mYuSuGYqIpM2cFgp9L4",
-                "qpdkY6nMknksfvYAhf2xIHp0iNRLkMlcWShxqzXyFJRxIsZ1Zz");
-        int genNum = new Random().nextInt(APIKEYS.size());
-        logger.info(genNum);
-        final String API_KEY = APIKEYS.get(genNum); // Select random API key from APIKEYS
-        return API_KEY;
+        builtInIndex = new Random().nextInt(BUILT_IN_KEYS.size());
+        return BUILT_IN_KEYS.get(builtInIndex); // Select random API key from the built-in keys
+    }
+
+    /**
+     * Called when Tumblr answers 401 for the current key: moves from a user supplied key to the built-in
+     * keys, and then from one built-in key to the next (some of the shared keys get revoked).
+     */
+    private static synchronized void switchApiKey() {
+        if (API_KEY == null) {
+            API_KEY = pickRandomApiKey();
+        }
+        boolean userKeyInUse = !useDefaultApiKey
+                && !Utils.getConfigString(TUMBLR_AUTH_CONFIG_KEY, BUILT_IN_KEYS.get(0)).equals(BUILT_IN_KEYS.get(0));
+        if (userKeyInUse) {
+            useDefaultApiKey = true;
+            return;
+        }
+        builtInIndex = (builtInIndex + 1) % BUILT_IN_KEYS.size();
+        API_KEY = BUILT_IN_KEYS.get(builtInIndex);
+        useDefaultApiKey = true;
+    }
+
+    private JSONObject getJsonWithKeyRotation(String mediaType, int offset) throws IOException {
+        IOException unauthorized = null;
+        for (int attempt = 0; attempt <= BUILT_IN_KEYS.size(); attempt++) {
+            String apiURL = getTumblrApiURL(mediaType, offset);
+            if (attempt > 0) {
+                logger.info("Retrieving " + apiURL);
+            }
+            try {
+                return Http.url(apiURL).getJSON();
+            } catch (IOException e) {
+                Throwable cause = e.getCause();
+                if (!(cause instanceof HttpStatusException)
+                        || ((HttpStatusException) cause).getStatusCode() != HttpURLConnection.HTTP_UNAUTHORIZED) {
+                    throw e;
+                }
+                unauthorized = e;
+                logger.info("Tumblr answered 401 (Unauthorized) for this API key; trying another key");
+                switchApiKey();
+            }
+        }
+        throw new IOException("Tumblr rejected every API key that ripme tried (401 Unauthorized). Register a free "
+                + "application at https://www.tumblr.com/oauth/apps and put its \"OAuth Consumer Key\" into "
+                + "rip.properties as tumblr.auth=<key>", unauthorized);
     }
 
     public TumblrRipper(URL url) throws IOException {
@@ -186,17 +230,16 @@ public class TumblrRipper extends AlbumRipper {
                 sendUpdate(STATUS.LOADING_RESOURCE, apiURL);
 
                 JSONObject json = null;
-                boolean retry = false;
 
+                String failure = null;
                 try {
-                    json = Http.url(apiURL).getJSON();
+                    json = getJsonWithKeyRotation(mediaType, offset);
                 } catch (IOException e) {
+                    failure = e.getMessage();
                     Throwable cause = e.getCause();
                     if (cause instanceof HttpStatusException) {
                         HttpStatusException status = (HttpStatusException)cause;
-                        if (status.getStatusCode() == HttpURLConnection.HTTP_UNAUTHORIZED && !useDefaultApiKey) {
-                            retry = true;
-                        } else if (status.getStatusCode() == 404) {
+                        if (status.getStatusCode() == 404) {
                             logger.error("No user or album found!");
                             sendUpdate(STATUS.NO_ALBUM_OR_USER, "Album or user doesn't exist!");
                             shouldStopRipping = true;
@@ -210,23 +253,11 @@ public class TumblrRipper extends AlbumRipper {
                     }
                 }
 
-                if (retry) {
-                    useDefaultApiKey = true;
-                    String apiKey = getApiKey();
-
-                    String message = "401 Unauthorized. Will retry with default Tumblr API key: " + apiKey;
-                    logger.info(message);
-                    sendUpdate(STATUS.DOWNLOAD_WARN, message);
-
-                    Utils.setConfigString(TUMBLR_AUTH_CONFIG_KEY, apiKey); // save the default key to the config
-
-                    // retry loading the JSON
-
-                    apiURL = getTumblrApiURL(mediaType, offset);
-                    logger.info("Retrieving " + apiURL);
-                    sendUpdate(STATUS.LOADING_RESOURCE, apiURL);
-
-                    json = Http.url(apiURL).getJSON();
+                if (json == null) {
+                    logger.error("Could not load " + apiURL + ": " + failure);
+                    sendUpdate(STATUS.RIP_ERRORED, failure);
+                    shouldStopRipping = true;
+                    break;
                 }
 
                 try {

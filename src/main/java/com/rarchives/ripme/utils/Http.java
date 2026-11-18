@@ -227,7 +227,8 @@ public class Http {
                     int status = ex.getStatusCode();
                     if (status == 401 || status == 403) {
                         // Optional: borrow the session cookies of the user's own browser and retry once.
-                        if (!browserImportAttempted && Utils.getConfigBoolean(BrowserCookieImporter.CONFIG_AUTO_IMPORT, false)) {
+                        if (!browserImportAttempted && !url.contains("://api.") // API endpoints are not logged-in pages
+                                && Utils.getConfigBoolean(BrowserCookieImporter.CONFIG_AUTO_IMPORT, false)) {
                             browserImportAttempted = true;
                             if (importCookiesFromBrowser()) {
                                 retries++; // the import is not a failed attempt
