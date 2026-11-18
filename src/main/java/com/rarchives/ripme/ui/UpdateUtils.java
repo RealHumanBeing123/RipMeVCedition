@@ -161,7 +161,13 @@ public class UpdateUtils {
             try {
                 UpdateUtils.downloadJarAndLaunch(getUpdateJarURL(latestVersion), true);
             } catch (IOException e) {
-                JOptionPane.showMessageDialog(null, "Error while updating: " + e.getMessage(), "RipMe Updater",
+                String reason = e.getMessage();
+                if (e instanceof org.jsoup.HttpStatusException
+                        && ((org.jsoup.HttpStatusException) e).getStatusCode() == 404) {
+                    reason = "version " + latestVersion + " has not been published as a release in " + REPO_NAME
+                            + " yet, so there is nothing to download";
+                }
+                JOptionPane.showMessageDialog(null, "Error while updating: " + reason, "RipMe Updater",
                         JOptionPane.ERROR_MESSAGE);
                 configUpdateLabel.setText("");
                 logger.error("Error while updating: ", e);
