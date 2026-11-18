@@ -16,11 +16,6 @@ Screenshots:
 
 <img width="311" height="293" alt="ripme2" src="https://github.com/user-attachments/assets/a82edd30-7686-4429-85cb-cbda350214b7" />
 
-## Download
-
-Download `ripme.jar` from the [latest release](https://github.com/ripmeapp/ripme/releases/latest). For information about running the `.jar` file, see
-[the How To Run wiki](https://github.com/ripmeapp/ripme/wiki/How-To-Run-RipMe).
-
 ## Minimum Requirements
 
 Requires Java 25 or later to run. RipMe has been tested on and is confirmed working on Windows, Linux, and Mac.
@@ -58,6 +53,7 @@ installed one), and stores them on your computer next to the manually entered co
 *Automatically import browser cookies when a site answers 401/403* to have RipMe do this by
 itself the first time a site answers 401/403 (off by default).
 
+
 Support by browser:
 
 | Browser | Support |
@@ -69,14 +65,45 @@ Support by browser:
 
 If your browser cannot be read, use Firefox for the login, or copy the `Cookie` request header by hand as described in the Site cookies dialog.
 
-## Compiling & Building
+## API keys needed for some websites
+
+Some sites like tumblr, twitter (X), instagram, and a few others require a new API key. I included my own that I requested, but it could get rate limited or revoked if too many people use it. So, I suggest that you request your own API key.
+After getting your own API key go to ```C:\Users\YourName\AppData\Local\ripme``` and change the ```tumblr.auth = APIkeyHere``` to include everything after the ```= ``` then hit save. You will be able to access the content of that website now.
+
+## Sites that currently don't work
+
+Some sites do not work at all, this is either because of the aforementioned API key problems like with twitter (X) changing it often so I cannnot keep up (maybe I will make a separate program for that which will try to keep up). There are others that are still down because of the PHP problem and some cloudflare problems as of the timing of updating this (the 18th of November, 2026). Make sure that you are putting in a link in the exact format that the ripper accepts, because some links do not work unless you get the specific link to that post rather than a profile link.
+
+## Compiling & Building (the easy way)
+
+1. Download and unzip the folder to a place that makes you happy.
+   
+2. Click on ```build.bat```
+   
+3. Open ripme located in ```\RipMeVCedition-main\build\libs```
+
+## Compiling & Building (skipping the false update)
+
+1. Download and unzip the folder to a place that makes you happy.
+   
+2. use CD for the place that you put it
+   
+3. Run the following to skip the false update
+   
+ ```gradlew.bat build -x test -PcustomVersion=2.1.20-14-5a3070e4```
+
+This just adds the current version to the build command so it tells the compiler that it's already the latest version and everything of that sort.
+
+## Compiling & Building (the hard way)
 
 1. Download and unzip the folder to a place that makes you happy.
    
 2. use CD for the place that you put it
    
 3. Two choices, the first one skips tests and the second one will perform tests
+4. 
    ``` gradlew.bat build -x test -PcustomVersion=1.0.0-dev```
    
    ```gradlew.bat test --tests "*BrowserCookieUnitTest" -PcustomVersion=1.0.0-dev```
+   
 The generated JAR (java archive) in build/libs will include all dependencies.
