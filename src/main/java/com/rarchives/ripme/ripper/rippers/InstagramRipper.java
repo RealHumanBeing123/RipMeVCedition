@@ -154,7 +154,14 @@ public class InstagramRipper extends AbstractJSONRipper {
     public JSONObject getFirstPage() throws IOException {
         setAuthCookie();
         Document document = Http.url(url).cookies(cookies).response().parse();
-        qHash = getQhash(document);
+        try {
+            qHash = getQhash(document);
+        } catch (RuntimeException e) {
+            // The JavaScript parser echoes the whole web page in its message; keep the error readable.
+            logger.debug("Could not read Instagram's page", e);
+            throw new IOException("Instagram has changed its website and ripme can no longer read it, so Instagram "
+                    + "ripping is currently not supported (" + e.getClass().getSimpleName() + ").");
+        }
         JSONObject jsonObject = getJsonObjectFromDoc(document);
         String hashtagNamePath = "entry_data.TagPage[0].graphql.hashtag.name";
         String singlePostIdPath = "graphql.shortcode_media.shortcode";

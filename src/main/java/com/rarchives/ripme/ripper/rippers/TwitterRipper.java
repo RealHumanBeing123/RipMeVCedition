@@ -85,10 +85,17 @@ public class TwitterRipper extends AbstractJSONRipper {
     }
 
     private void getAccessToken() throws IOException {
-        Document doc = Http.url("https://api.twitter.com/oauth2/token").ignoreContentType()
-                .header("Authorization", "Basic " + authKey)
-                .header("Content-Type", "application/x-www-form-urlencoded;charset=UTF-8")
-                .header("User-agent", "ripe and zipe").data("grant_type", "client_credentials").post();
+        Document doc;
+        try {
+            doc = Http.url("https://api.twitter.com/oauth2/token").ignoreContentType()
+                    .header("Authorization", "Basic " + authKey)
+                    .header("Content-Type", "application/x-www-form-urlencoded;charset=UTF-8")
+                    .header("User-agent", "ripe and zipe").data("grant_type", "client_credentials").post();
+        } catch (IOException e) {
+            throw new IOException("Twitter/X refused ripme's API key (" + e.getMessage().replaceAll("\\. You might.*", "")
+                    + "). This ripper uses Twitter's old developer API, which no longer works with the built-in key; "
+                    + "browser cookies cannot fix it.", e);
+        }
         String body = doc.body().html().replaceAll("&quot;", "\"");
         try {
             JSONObject json = new JSONObject(body);

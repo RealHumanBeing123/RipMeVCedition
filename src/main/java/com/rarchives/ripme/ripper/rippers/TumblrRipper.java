@@ -24,6 +24,7 @@ import org.jsoup.nodes.Document;
 import com.rarchives.ripme.ripper.AlbumRipper;
 import com.rarchives.ripme.ui.RipStatusMessage.STATUS;
 import com.rarchives.ripme.utils.Http;
+import com.rarchives.ripme.utils.TumblrUrls;
 import com.rarchives.ripme.utils.Utils;
 
 public class TumblrRipper extends AlbumRipper {
@@ -105,6 +106,18 @@ public class TumblrRipper extends AlbumRipper {
      */
     @Override
     public URL sanitizeURL(URL url) throws MalformedURLException, URISyntaxException {
+        // Newer style www.tumblr.com/<blog>/<postid>/<slug> -> <blog>.tumblr.com/post/<postid>
+        String converted = TumblrUrls.fromNewStyle(url.toExternalForm());
+        if (converted != null) {
+            logger.info("Converted " + url + " to " + converted);
+            url = new URI(converted).toURL();
+        }
+        String host = url.getHost().toLowerCase();
+        if ((host.equals("www.tumblr.com") || host.equals("tumblr.com"))
+                && (url.getPath().startsWith("/tagged/") || url.getPath().startsWith("/tag/"))) {
+            throw new MalformedURLException("Tag searches across all of Tumblr are not supported. "
+                    + "Use a tag on one blog instead: https://blogname.tumblr.com/tagged/tag");
+        }
         String u = url.toExternalForm();
         // Convert <FQDN>.tumblr.com/path to <FQDN>/path if needed
         if (StringUtils.countMatches(u, ".") > 2) {
@@ -428,7 +441,7 @@ public class TumblrRipper extends AlbumRipper {
             return this.subdomain + "_liked";
         }
 
-        throw new MalformedURLException("Expected format: http://subdomain[.tumblr.com][/tagged/tag|/post/postno]");
+        throw new MalformedURLException("Expected format: https://blogname.tumblr.com[/tagged/tag|/post/postno] or https://www.tumblr.com/blogname[/postno|/tagged/tag] (tag searches across all of Tumblr are not supported)");
     }
 
     private String getPrefix(int i) {
