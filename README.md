@@ -72,7 +72,7 @@ After getting your own API key go to ```C:\Users\YourName\AppData\Local\ripme```
 
 ## Sites that currently don't work
 
-Some sites do not work at all, this is either because of the aforementioned API key problems like with twitter (X) changing it often so I cannnot keep up (maybe I will make a separate program for that which will try to keep up). There are others that are still down because of the PHP problem and some cloudflare problems as of the timing of updating this (the 18th of November, 2026). Make sure that you are putting in a link in the exact format that the ripper accepts, because some links do not work unless you get the specific link to that post rather than a profile link.
+Some sites do not work at all, this is either because of the aforementioned API key problems like with twitter (X) changing it often so I cannnot keep up (maybe I will make a separate program for that which will try to keep up). There are others that are still down because of the PHP problem and some cloudflare problems as of the timing of updating this (the 18th of November, 2026). Make sure that you are putting in a link in the exact format that the ripper accepts, because some links do not work unless you get the specific link to that post rather than a profile link.[ A full list of websites that don't work and why are available here.](https://github.com/RealHumanBeing123/RipMeVCedition/wiki)
 
 ## Compiling & Building (the easy way)
 
