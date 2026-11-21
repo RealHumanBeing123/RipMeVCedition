@@ -2,6 +2,7 @@ package com.rarchives.ripme.ripper.rippers;
 
 import java.io.IOException;
 import java.net.MalformedURLException;
+import java.net.URI;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -73,6 +74,20 @@ public class ThechiveRipper extends AbstractHTMLRipper {
 
         throw new MalformedURLException("Expected thechive.com URL format: "
                 + "thechive.com/YEAR/MONTH/DAY/POSTTITLE/ OR i.thechive.com/username, got " + url + " instead.");
+    }
+
+    @Override
+    protected Document getFirstPage() throws IOException {
+        Document doc = Http.url(url).get();
+        // Removed posts and the closed i.thechive.com user pages are redirected to the home page.
+        String finalPath = URI.create(doc.location()).getPath();
+        boolean landedOnHome = finalPath == null || finalPath.isEmpty() || finalPath.equals("/");
+        boolean askedForHome = url.getPath() == null || url.getPath().length() <= 1;
+        if (landedOnHome && !askedForHome) {
+            throw new IOException("thechive.com sent " + url + " to its home page, so this post or user page no longer exists. "
+                    + "(i.thechive.com user pages were closed by the site; try a current thechive.com/YEAR/MONTH/DAY/TITLE/ link.)");
+        }
+        return doc;
     }
 
     @Override
