@@ -8,6 +8,8 @@ import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 
@@ -15,6 +17,8 @@ import com.rarchives.ripme.ripper.AbstractHTMLRipper;
 import com.rarchives.ripme.utils.Http;
 
 public class PichunterRipper extends AbstractHTMLRipper {
+
+    private static final Logger logger = LogManager.getLogger(PichunterRipper.class);
 
     public PichunterRipper(URL url) throws IOException {
         super(url);
@@ -32,12 +36,12 @@ public class PichunterRipper extends AbstractHTMLRipper {
 
     @Override
     public String getGID(URL url) throws MalformedURLException {
-        Pattern p = Pattern.compile("https?://www.pichunter.com/(|tags|models|sites)/(\\S*)/?");
+        Pattern p = Pattern.compile("https?://www.pichunter.com/(|tags|models|sites|creators)/(\\S*)/?");
         Matcher m = p.matcher(url.toExternalForm());
         if (m.matches()) {
             return m.group(2);
         }
-        p = Pattern.compile("https?://www.pichunter.com/(tags|models|sites)/(\\S*)/photos/\\d+/?");
+        p = Pattern.compile("https?://www.pichunter.com/(tags|models|sites|creators)/(\\S*)/photos/\\d+/?");
         m = p.matcher(url.toExternalForm());
         if (m.matches()) {
             return m.group(2);
@@ -54,7 +58,7 @@ public class PichunterRipper extends AbstractHTMLRipper {
             return m.group(1);
         }
         throw new MalformedURLException("Expected pichunter URL format: " +
-                "pichunter.com/(tags|models|sites)/Name/ - got " + url + " instead");
+                "pichunter.com/(tags|models|sites|creators)/Name/ - got " + url + " instead");
     }
 
     private boolean isPhotoSet(URL url) {
@@ -108,6 +112,18 @@ public class PichunterRipper extends AbstractHTMLRipper {
             for (Element el : doc.select(fallback)) {
                 result.add(imageAddress(el));
             }
+        }
+        if (result.isEmpty()) {
+            // help to diagnose the next layout change: say what the page does contain
+            StringBuilder seen = new StringBuilder();
+            int n = 0;
+            for (Element img : doc.select("img")) {
+                if (n++ < 8) {
+                    seen.append("\n   ").append(img.outerHtml().length() > 300 ? img.outerHtml().substring(0, 300) : img.outerHtml());
+                }
+            }
+            logger.warn("Pichunter: no pictures recognised on " + doc.location() + " (page has " + doc.select("img").size()
+                    + " img tags). First ones:" + seen);
         }
         List<String> out = new ArrayList<>();
         for (String u : result) {
