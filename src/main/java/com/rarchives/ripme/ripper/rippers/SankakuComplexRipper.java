@@ -74,7 +74,7 @@ public class SankakuComplexRipper extends AbstractHTMLRipper {
     private static final String JSON_ATTR = "data-json";
 
     private String rawTags() throws IOException {
-        String query = url.getRawQuery();
+        String query = url.getQuery();
         if (query != null) {
             for (String part : query.split("&")) {
                 if (part.startsWith("tags=")) {
