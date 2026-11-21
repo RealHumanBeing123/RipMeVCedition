@@ -14,7 +14,7 @@ public class PichunterRipperTest extends RippersTest {
     @Tag("flaky")
     public void testPichunterModelPageRip() throws IOException, URISyntaxException {
         // A non-photoset
-        PichunterRipper ripper = new PichunterRipper(new URI("https://www.pichunter.com/models/Madison_Ivy").toURL());
+        PichunterRipper ripper = new PichunterRipper(new URI("https://www.pichunter.com/models/Abby_C").toURL());
         testRipper(ripper);
     }
 
@@ -23,7 +23,15 @@ public class PichunterRipperTest extends RippersTest {
     public void testPichunterGalleryRip() throws IOException, URISyntaxException {
         // a photo set
         PichunterRipper ripper = new PichunterRipper(
-                new URI("http://www.pichunter.com/gallery/3270642/Its_not_only_those_who").toURL());
+                new URI("https://www.pichunter.com/gallery/802829/Sapphic_sluts_having_fun_for_D").toURL());
         testRipper(ripper);
+    }
+
+    @Test
+    public void testGetGID() throws IOException, URISyntaxException {
+        PichunterRipper creator = new PichunterRipper(new URI("https://www.pichunter.com/creators/miamalkova").toURL());
+        org.junit.jupiter.api.Assertions.assertEquals("miamalkova", creator.getGID(creator.getURL()));
+        PichunterRipper gallery = new PichunterRipper(new URI("https://www.pichunter.com/gallery/802829/Sapphic_sluts_having_fun_for_D").toURL());
+        org.junit.jupiter.api.Assertions.assertEquals("Sapphic_sluts_having_fun_for_D", gallery.getGID(gallery.getURL()));
     }
 }

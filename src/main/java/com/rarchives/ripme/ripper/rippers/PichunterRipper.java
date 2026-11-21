@@ -71,6 +71,9 @@ public class PichunterRipper extends AbstractHTMLRipper {
     public Document getNextPage(Document doc) throws IOException {
         Element link = doc.select("a[rel=next]").first();
         if (link == null) {
+            link = doc.select("ul.pagination li.active + li a, li.page-item.active + li.page-item a").first();
+        }
+        if (link == null) {
             Element elem = doc.select("div.paperSpacings > ul > li.arrow").last();
             if (elem != null) {
                 link = elem.select("a").first();
@@ -86,58 +89,77 @@ public class PichunterRipper extends AbstractHTMLRipper {
         throw new IOException("No more pages");
     }
 
-    /** First usable address of a (possibly lazy-loaded) picture, as an absolute URL. */
-    private static String imageAddress(Element img) {
-        for (String attr : new String[] { "data-src", "data-original", "data-lazy-src", "src" }) {
-            String v = img.absUrl(attr);
-            if (!v.isEmpty() && !v.startsWith("data:")) {
-                return v;
+    /** Full-size pictures of one gallery page: the link around every thumbnail points at the big picture. */
+    private static List<String> picturesOfGallery(Document doc) {
+        java.util.LinkedHashSet<String> found = new java.util.LinkedHashSet<>();
+        for (Element a : doc.select("a[data-fancybox][href]")) {
+            String href = a.absUrl("href");
+            if (href.matches("(?i)^[^?#]*\\.(jpe?g|png|gif|webp)(\\?.*)?$")) {
+                found.add(href);
             }
         }
-        return "";
+        if (found.isEmpty()) {
+            // no links: use the thumbnails and ask for the big version of each
+            for (Element img : doc.select("article.grid-item img, .gallery-grid img")) {
+                String src = img.absUrl("src");
+                if (src.contains("post_archive_thumb")) {
+                    found.add(src.replace("post_archive_thumb", "post_single_big"));
+                }
+            }
+        }
+        return new ArrayList<>(found);
     }
+
+    /** Which gallery (folder name) a picture belongs to, for pages that list several galleries. */
+    private final java.util.Map<String, String> folders = new java.util.concurrent.ConcurrentHashMap<>();
 
     @Override
     public List<String> getURLsFromPage(Document doc) {
-        java.util.LinkedHashSet<String> result = new java.util.LinkedHashSet<>();
-        String known = isPhotoSet(url) ? "div.flex-images > figure > a.item > img" : "div.thumbtable > a.thumb > img";
-        for (Element el : doc.select(known)) {
-            result.add(imageAddress(el));
-        }
-        if (result.isEmpty()) {
-            // The page layout has changed: use any thumbnail that sits inside a link to a gallery or a photo
-            String fallback = isPhotoSet(url)
-                    ? "figure img, a.item img, .flex-images img"
-                    : "a[href*=/gallery/] img, a.thumb img, .thumbtable img";
-            for (Element el : doc.select(fallback)) {
-                result.add(imageAddress(el));
+        if (isPhotoSet(url)) {
+            List<String> pictures = picturesOfGallery(doc);
+            if (pictures.isEmpty()) {
+                logger.warn("Pichunter: no pictures recognised on " + doc.location() + " (page has "
+                        + doc.select("img").size() + " img tags)");
             }
+            return pictures;
         }
-        if (result.isEmpty()) {
-            // help to diagnose the next layout change: say what the page does contain
-            StringBuilder seen = new StringBuilder();
-            int n = 0;
-            for (Element img : doc.select("img")) {
-                if (n++ < 8) {
-                    seen.append("\n   ").append(img.outerHtml().length() > 300 ? img.outerHtml().substring(0, 300) : img.outerHtml());
+        // A model, creator, tag or site page lists galleries: open each one and take all of its pictures
+        List<String> result = new ArrayList<>();
+        java.util.LinkedHashSet<String> galleries = new java.util.LinkedHashSet<>();
+        for (Element a : doc.select("article.grid-item a.item-link[href*=/gallery/], a.item-link[href*=/gallery/]")) {
+            galleries.add(a.absUrl("href"));
+        }
+        for (String gallery : galleries) {
+            if (isStopped() || (isThisATest() && !result.isEmpty())) {
+                break;
+            }
+            try {
+                Matcher m = Pattern.compile("/gallery/(\\d+)/([^/?#]*)").matcher(gallery);
+                String folder = m.find() ? m.group(1) + "_" + m.group(2) : "gallery";
+                sleep(300);
+                for (String picture : picturesOfGallery(Http.url(gallery).get())) {
+                    folders.put(picture, folder);
+                    result.add(picture);
                 }
+            } catch (IOException e) {
+                logger.warn("Could not load gallery " + gallery, e);
             }
-            logger.warn("Pichunter: no pictures recognised on " + doc.location() + " (page has " + doc.select("img").size()
-                    + " img tags). First ones:" + seen);
         }
-        List<String> out = new ArrayList<>();
-        for (String u : result) {
-            if (u.isEmpty()) {
-                continue;
-            }
-            // thumbnails end in _i, the full size picture in _o
-            out.add(u.replaceAll("_i(\\.[A-Za-z0-9]+)(\\?.*)?$", "_o$1"));
+        if (result.isEmpty()) {
+            logger.warn("Pichunter: no galleries or pictures recognised on " + doc.location());
         }
-        return out;
+        return result;
     }
 
     @Override
     public void downloadURL(URL url, int index) {
-        addURLToDownload(url, getPrefix(index));
+        java.util.Map<String, String> options = new java.util.HashMap<>();
+        options.put("prefix", getPrefix(index));
+        options.put("referrer", "https://www.pichunter.com/");
+        String folder = folders.get(url.toExternalForm());
+        if (folder != null) {
+            options.put("subdirectory", folder);
+        }
+        addURLToDownload(url, options);
     }
 }
