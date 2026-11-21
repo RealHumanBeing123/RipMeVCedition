@@ -65,30 +65,59 @@ public class PichunterRipper extends AbstractHTMLRipper {
 
     @Override
     public Document getNextPage(Document doc) throws IOException {
-        // We use comic-nav-next to the find the next page
-        Element elem = doc.select("div.paperSpacings > ul > li.arrow").last();
-        if (elem != null) {
-            String nextPage = elem.select("a").attr("href");
-            // Some times this returns a empty string
-            // This for stops that
-            return Http.url("http://www.pichunter.com" + nextPage).get();
+        Element link = doc.select("a[rel=next]").first();
+        if (link == null) {
+            Element elem = doc.select("div.paperSpacings > ul > li.arrow").last();
+            if (elem != null) {
+                link = elem.select("a").first();
+            }
+        }
+        if (link != null) {
+            String nextPage = link.absUrl("href");
+            // Sometimes the link is empty or points back to the same page
+            if (!nextPage.isEmpty() && !nextPage.equals(doc.location())) {
+                return Http.url(nextPage).get();
+            }
         }
         throw new IOException("No more pages");
     }
 
-    @Override
-    public List<String> getURLsFromPage(Document doc) {
-        List<String> result = new ArrayList<>();
-        if (!isPhotoSet(url)) {
-            for (Element el : doc.select("div.thumbtable > a.thumb > img")) {
-                result.add(el.attr("src").replaceAll("_i", "_o"));
-            }
-        } else {
-            for (Element el : doc.select("div.flex-images > figure > a.item > img")) {
-                result.add(el.attr("src").replaceAll("_i", "_o"));
+    /** First usable address of a (possibly lazy-loaded) picture, as an absolute URL. */
+    private static String imageAddress(Element img) {
+        for (String attr : new String[] { "data-src", "data-original", "data-lazy-src", "src" }) {
+            String v = img.absUrl(attr);
+            if (!v.isEmpty() && !v.startsWith("data:")) {
+                return v;
             }
         }
-        return result;
+        return "";
+    }
+
+    @Override
+    public List<String> getURLsFromPage(Document doc) {
+        java.util.LinkedHashSet<String> result = new java.util.LinkedHashSet<>();
+        String known = isPhotoSet(url) ? "div.flex-images > figure > a.item > img" : "div.thumbtable > a.thumb > img";
+        for (Element el : doc.select(known)) {
+            result.add(imageAddress(el));
+        }
+        if (result.isEmpty()) {
+            // The page layout has changed: use any thumbnail that sits inside a link to a gallery or a photo
+            String fallback = isPhotoSet(url)
+                    ? "figure img, a.item img, .flex-images img"
+                    : "a[href*=/gallery/] img, a.thumb img, .thumbtable img";
+            for (Element el : doc.select(fallback)) {
+                result.add(imageAddress(el));
+            }
+        }
+        List<String> out = new ArrayList<>();
+        for (String u : result) {
+            if (u.isEmpty()) {
+                continue;
+            }
+            // thumbnails end in _i, the full size picture in _o
+            out.add(u.replaceAll("_i(\\.[A-Za-z0-9]+)(\\?.*)?$", "_o$1"));
+        }
+        return out;
     }
 
     @Override
