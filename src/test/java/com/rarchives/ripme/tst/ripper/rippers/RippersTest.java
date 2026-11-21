@@ -98,6 +98,10 @@ public class RippersTest {
 
     /** Recursively deletes a directory */
     void deleteDir(File dir) {
+        if (dir == null || !dir.isDirectory()) {
+            // the rip failed before a folder was created: nothing to clean up, and do not hide the real error
+            return;
+        }
         if (!dir.getName().contains("_")) {
             // All ripped albums contain an underscore
             // Don't delete an album if it doesn't have an underscore

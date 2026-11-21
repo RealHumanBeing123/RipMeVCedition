@@ -56,7 +56,7 @@ public class WebtoonsRipper extends AbstractHTMLRipper {
 
     @Override
     public String getGID(URL url) throws MalformedURLException {
-        Pattern pat = Pattern.compile("https?://www.webtoons.com/[a-zA-Z]+/[a-zA-Z]+/([a-zA-Z0-9_-]*)/[a-zA-Z0-9_-]+/\\S*");
+        Pattern pat = Pattern.compile("https?://www.webtoons.com/[a-zA-Z-_]+/[a-zA-Z_-]+/([a-zA-Z0-9_-]*)/[a-zA-Z0-9_-]+/\\S*");
         Matcher mat = pat.matcher(url.toExternalForm());
         if (mat.matches()) {
             return mat.group(1);

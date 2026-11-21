@@ -8,7 +8,7 @@ import java.util.regex.Pattern;
 
 public class XlecxRipper extends XcartxRipper {
 
-    private Pattern p = Pattern.compile("^https?://xlecx.org/([a-zA-Z0-9_\\-]+).html");
+    private Pattern p = Pattern.compile("^https?://(?:www\\.)?xlecx\\.(?:org|com|one)/([a-zA-Z0-9_\\-]+).html");
 
     public XlecxRipper(URL url) throws IOException {
         super(url);

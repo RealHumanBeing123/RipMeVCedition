@@ -34,7 +34,7 @@ public class XcartxRipper extends AbstractHTMLRipper {
 
     @Override
     public String getGID(URL url) throws MalformedURLException {
-        Pattern p = Pattern.compile("^https?://xcartx.com/([a-zA-Z0-9_\\-]+).html");
+        Pattern p = Pattern.compile("^https?://(?:www\\.)?xcartx\\.(?:com|one)/([a-zA-Z0-9_\\-]+).html");
         Matcher m = p.matcher(url.toExternalForm());
         if (m.matches()) {
             return m.group(1);

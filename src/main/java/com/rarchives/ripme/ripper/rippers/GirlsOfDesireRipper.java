@@ -53,7 +53,7 @@ public class GirlsOfDesireRipper extends AbstractHTMLRipper {
         Pattern p;
         Matcher m;
 
-        p = Pattern.compile("^www\\.girlsofdesire\\.org/galleries/([\\w\\d-]+)/$");
+        p = Pattern.compile("^https?://www\\.girlsofdesire\\.org/galleries/([\\w\\d-]+)/?$");
         m = p.matcher(url.toExternalForm());
         if (m.matches()) {
             return m.group(1);

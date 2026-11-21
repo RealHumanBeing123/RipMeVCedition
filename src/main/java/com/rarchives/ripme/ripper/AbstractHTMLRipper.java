@@ -169,7 +169,7 @@ public abstract class AbstractHTMLRipper extends AbstractRipper {
                 for (String imageURL : imageURLs) {
                     imageIndex += 1;
                     logger.debug("Found image url #" + imageIndex + ": '" + imageURL + "'");
-                    URI imageUri = new URI(imageURL.trim());
+                    URI imageUri = new URI(imageURL.trim().replace(" ", "%20"));
                     if (!imageUri.isAbsolute() && !doc.location().isEmpty()) {
                         imageUri = new URI(doc.location()).resolve(imageUri);
                     }
