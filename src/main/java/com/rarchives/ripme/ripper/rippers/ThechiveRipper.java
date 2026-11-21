@@ -158,7 +158,11 @@ public class ThechiveRipper extends AbstractHTMLRipper {
 
     @Override
     public void downloadURL(URL url, int index) {
-        addURLToDownload(url, getPrefix(index));
+        // thechive.com serves its uploads only to requests that look like they come from one of its pages
+        Map<String, String> options = new HashMap<>();
+        options.put("prefix", getPrefix(index));
+        options.put("referrer", "https://thechive.com/");
+        addURLToDownload(url, options);
     }
 
     private List<String> getUrlsFromThechive(Document doc) {
@@ -261,37 +265,10 @@ public class ThechiveRipper extends AbstractHTMLRipper {
      */
     private List<String> getUrlsFromCurrentLayout(Document doc) {
         Element scope = doc.selectFirst("article .entry-content, .entry-content, .post-content, article, main");
-        if (scope == null) {
-            scope = doc.body();
-        }
-        java.util.LinkedHashSet<String> found = new java.util.LinkedHashSet<>();
-        for (Element el : scope.select("img, video, source, a[href]")) {
-            for (String attr : new String[] { "data-gifsrc", "data-mp4", "data-src", "data-lazy-src", "src", "href" }) {
-                String v = el.hasAttr(attr) ? el.absUrl(attr) : "";
-                if (isUpload(v)) {
-                    found.add(cleanUpload(v));
-                    break;
-                }
-            }
-            if (el.hasAttr("srcset")) {
-                String best = null;
-                long bestWidth = -1;
-                for (String part : el.attr("srcset").split(",")) {
-                    String[] bits = part.trim().split("\\s+");
-                    String candidate = bits[0];
-                    long w = 0;
-                    if (bits.length > 1 && bits[1].matches("\\d+w")) {
-                        w = Long.parseLong(bits[1].replace("w", ""));
-                    }
-                    if (w > bestWidth && isUpload(candidate)) {
-                        best = candidate;
-                        bestWidth = w;
-                    }
-                }
-                if (best != null) {
-                    found.add(cleanUpload(best));
-                }
-            }
+        java.util.LinkedHashSet<String> found = collectUploads(scope == null ? doc.body() : scope);
+        if (found.isEmpty()) {
+            // layout not recognised: take everything on the page that is an uploaded file
+            found = collectUploads(doc.body());
         }
         if (found.isEmpty()) {
             Element og = doc.selectFirst("meta[property=og:image]");
@@ -299,7 +276,28 @@ public class ThechiveRipper extends AbstractHTMLRipper {
                 found.add(cleanUpload(og.attr("content")));
             }
         }
+        logger.info("Found " + found.size() + " uploaded files on " + doc.location());
         return new ArrayList<>(found);
+    }
+
+    private static final Pattern UPLOAD_URL = Pattern.compile(
+            "(?:https?:)?//[A-Za-z0-9.\\-]*thechive\\.com/wp-content/uploads/[^\"'\\s<>)\\\\,]+?\\.(?:jpe?g|png|gif|webp|mp4|webm)(?:\\?[^\"'\\s<>)\\\\,]*)?",
+            Pattern.CASE_INSENSITIVE);
+
+    /** Every uploaded picture/GIF/video mentioned anywhere inside the element: attributes, srcset, lazy-load data, noscript, JSON. */
+    private java.util.LinkedHashSet<String> collectUploads(Element scope) {
+        java.util.LinkedHashSet<String> found = new java.util.LinkedHashSet<>();
+        Matcher m = UPLOAD_URL.matcher(scope.html().replace("&amp;", "&").replace("\\/", "/"));
+        while (m.find()) {
+            String u = m.group();
+            if (u.startsWith("//")) {
+                u = "https:" + u;
+            }
+            if (isUpload(u)) {
+                found.add(cleanUpload(u));
+            }
+        }
+        return found;
     }
 
     private static boolean isUpload(String u) {
