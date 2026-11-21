@@ -9,11 +9,12 @@ import com.rarchives.ripme.ripper.rippers.SankakuComplexRipper;
 
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Disabled;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 public class SankakuComplexRipperTest extends RippersTest {
     @Test
-    @Disabled("https://github.com/RipMeApp/ripme/issues/257")
+    @Tag("flaky")
     public void testSankakuChanRip() throws IOException, URISyntaxException {
         SankakuComplexRipper ripper = new SankakuComplexRipper(
                 new URI("https://chan.sankakucomplex.com/?tags=cleavage").toURL());
@@ -21,7 +22,7 @@ public class SankakuComplexRipperTest extends RippersTest {
     }
 
     @Test
-    @Disabled("https://github.com/RipMeApp/ripme/issues/257")
+    @Disabled("idol.sankakucomplex.com moved to idolcomplex.com, which is not supported")
     public void testSankakuIdolRip() throws IOException, URISyntaxException {
         SankakuComplexRipper ripper = new SankakuComplexRipper(
                 new URI("https://idol.sankakucomplex.com/?tags=meme_%28me%21me%21me%21%29_%28cosplay%29").toURL());

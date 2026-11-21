@@ -14,9 +14,9 @@ import java.util.regex.Pattern;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.jsoup.Connection.Response;
+import org.json.JSONArray;
+import org.json.JSONObject;
 import org.jsoup.nodes.Document;
-import org.jsoup.nodes.Element;
 
 import com.rarchives.ripme.ripper.AbstractHTMLRipper;
 import com.rarchives.ripme.utils.Http;
@@ -24,9 +24,6 @@ import com.rarchives.ripme.utils.Http;
 public class SankakuComplexRipper extends AbstractHTMLRipper {
 
     private static final Logger logger = LogManager.getLogger(SankakuComplexRipper.class);
-
-    private Document albumDoc = null;
-    private Map<String,String> cookies = new HashMap<>();
 
     public SankakuComplexRipper(URL url) throws IOException {
         super(url);
@@ -72,55 +69,90 @@ public class SankakuComplexRipper extends AbstractHTMLRipper {
 
     }
 
+    // Sankaku's pages are rendered by JavaScript and need a login; its public JSON API does not.
+    private static final String API = "https://sankakuapi.com/v2/posts/keyset";
+    private static final String JSON_ATTR = "data-json";
+
+    private String rawTags() throws IOException {
+        String query = url.getRawQuery();
+        if (query != null) {
+            for (String part : query.split("&")) {
+                if (part.startsWith("tags=")) {
+                    return part.substring("tags=".length());
+                }
+            }
+        }
+        throw new IOException("No tags= found in " + url);
+    }
+
+    private Document apiPage(String next) throws IOException {
+        String api = API + "?tags=" + rawTags() + "&lang=en&limit=100"
+                + (next != null ? "&next=" + java.net.URLEncoder.encode(next, java.nio.charset.StandardCharsets.UTF_8) : "");
+        JSONObject json = Http.url(api)
+                .header("Accept", "application/vnd.sankaku.api+json;v=2")
+                .header("Origin", "https://chan.sankakucomplex.com")
+                .referrer("https://chan.sankakucomplex.com/")
+                .getJSON();
+        Document doc = new Document(api);
+        doc.body().attr(JSON_ATTR, json.toString());
+        return doc;
+    }
+
     @Override
     public Document getFirstPage() throws IOException {
-        if (albumDoc == null) {
-            Response resp = Http.url(url).response();
-            cookies.putAll(resp.cookies());
-            albumDoc = resp.parse();
+        String sub = getSubDomain(url);
+        if (sub != null && sub.startsWith("idol")) {
+            throw new IOException("idol.sankakucomplex.com has moved to idolcomplex.com, which ripme cannot read. "
+                    + "Only chan.sankakucomplex.com tag searches are supported.");
         }
-        return albumDoc;
+        return apiPage(null);
     }
 
     @Override
     public List<String> getURLsFromPage(Document doc) {
         List<String> imageURLs = new ArrayList<>();
-        // Image URLs are basically thumbnail URLs with a different domain, a simple
-        // path replacement, and a ?xxxxxx post ID at the end (obtainable from the href)
-        for (Element thumbSpan : doc.select("div.content > div > span.thumb > a")) {
-            String postLink = thumbSpan.attr("href");
-                try {
-                    String subDomain = getSubDomain(url);
-                    String siteURL = "https://" + subDomain + "sankakucomplex.com";
-                    // Get the page the full sized image is on
-                    Document subPage = Http.url(siteURL + postLink).get();
-                    logger.info("Checking page " + siteURL + postLink);
-                    imageURLs.add("https:" + subPage.select("div[id=stats] > ul > li > a[id=highres]").attr("href"));
-                } catch (IOException e) {
-                    logger.warn("Error while loading page " + postLink, e);
-                }
+        JSONArray data = new JSONObject(doc.body().attr(JSON_ATTR)).optJSONArray("data");
+        if (data == null) {
+            return imageURLs;
+        }
+        int hidden = 0;
+        for (int i = 0; i < data.length(); i++) {
+            String file = data.getJSONObject(i).optString("file_url", "");
+            if (file.isEmpty() || file.equals("null")) {
+                hidden++; // posts that need a Sankaku login give no file address
+                continue;
+            }
+            imageURLs.add(file.startsWith("//") ? "https:" + file : file);
+        }
+        if (hidden > 0) {
+            logger.info(hidden + " posts on this page need a Sankaku login and were skipped");
         }
         return imageURLs;
     }
 
     @Override
     public void downloadURL(URL url, int index) {
-        sleep(8000);
-        addURLToDownload(url, getPrefix(index));
+        sleep(1000);
+        java.util.Map<String, String> options = new HashMap<>();
+        options.put("prefix", getPrefix(index));
+        options.put("referrer", "https://chan.sankakucomplex.com/");
+        addURLToDownload(url, options);
     }
 
     @Override
     public Document getNextPage(Document doc) throws IOException {
-        Element pagination = doc.select("div.pagination").first();
-        if (pagination.hasAttr("next-page-url")) {
-            String nextPage = pagination.attr("abs:next-page-url");
-            // Only logged in users can see past page 25
-            // Trying to rip page 26 will throw a no images found error
-            if (!nextPage.contains("page=26")) {
-                logger.info("Getting next page: " + pagination.attr("abs:next-page-url"));
-                return Http.url(pagination.attr("abs:next-page-url")).cookies(cookies).get();
-            }
+        JSONObject json = new JSONObject(doc.body().attr(JSON_ATTR));
+        JSONObject meta = json.optJSONObject("meta");
+        String next = meta == null ? "" : meta.optString("next", "");
+        if (next.isEmpty() || next.equals("null")) {
+            throw new IOException("No more pages");
         }
-        throw new IOException("No more pages");
+        sleep(1000);
+        Document nextDoc = apiPage(next);
+        JSONArray data = new JSONObject(nextDoc.body().attr(JSON_ATTR)).optJSONArray("data");
+        if (data == null || data.isEmpty()) {
+            throw new IOException("No more pages");
+        }
+        return nextDoc;
     }
 }
