@@ -3,6 +3,7 @@ package com.rarchives.ripme.ripper.rippers;
 import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -29,7 +30,10 @@ public class ThechiveRipper extends AbstractHTMLRipper {
 
     private static final Logger logger = LogManager.getLogger(ThechiveRipper.class);
 
-    private Pattern p1 = Pattern.compile("^https?://thechive.com/[0-9]*/[0-9]*/[0-9]*/([a-zA-Z0-9_\\-]*)/?$");
+    // Posts are thechive.com/CATEGORY/POST/ or thechive.com/CATEGORY/SUBCATEGORY/POST/ (older ones: /YEAR/MONTH/DAY/POST/).
+    // Anything after "?" (for example ?utm_postid=...) is ignored.
+    private Pattern p1 = Pattern.compile("^https?://(?:www\\.)?thechive\\.com/(?!(?:tag|author|page|search|wp-content|wp-json)/)"
+            + "(?:[a-zA-Z0-9_\\-]+/)+([a-zA-Z0-9_\\-]+)/?(?:[?#].*)?$");
     private Pattern imagePattern = Pattern.compile("<img\\s(?:.|\\n)+?>");
 
     // i.thechive.com specific variables.
@@ -56,6 +60,17 @@ public class ThechiveRipper extends AbstractHTMLRipper {
     @Override
     public String getDomain() {
         return "thechive.com";
+    }
+
+    @Override
+    public URL sanitizeURL(URL url) throws MalformedURLException, URISyntaxException {
+        String u = url.toExternalForm();
+        if (p1.matcher(u).matches()) {
+            // drop tracking parameters such as ?utm_postid=...
+            u = u.replaceAll("[?#].*$", "");
+            return new URI(u).toURL();
+        }
+        return url;
     }
 
     @Override
@@ -192,7 +207,11 @@ public class ThechiveRipper extends AbstractHTMLRipper {
 
         // strip all GET parameters from the links( such as quality, width, height as to
         // get the original image.).
-        result.replaceAll(s -> s.substring(0, s.indexOf("?")));
+        result.replaceAll(u -> u.contains("?") ? u.substring(0, u.indexOf("?")) : u);
+
+        if (result.isEmpty()) {
+            result = getUrlsFromCurrentLayout(doc);
+        }
 
         return result;
     }
@@ -236,4 +255,61 @@ public class ThechiveRipper extends AbstractHTMLRipper {
         return result;
     }
 
+    /**
+     * Current thechive.com pages: pictures, GIFs and videos are ordinary files in /wp-content/uploads/
+     * inside the post. Theme graphics, avatars and ads are ignored.
+     */
+    private List<String> getUrlsFromCurrentLayout(Document doc) {
+        Element scope = doc.selectFirst("article .entry-content, .entry-content, .post-content, article, main");
+        if (scope == null) {
+            scope = doc.body();
+        }
+        java.util.LinkedHashSet<String> found = new java.util.LinkedHashSet<>();
+        for (Element el : scope.select("img, video, source, a[href]")) {
+            for (String attr : new String[] { "data-gifsrc", "data-mp4", "data-src", "data-lazy-src", "src", "href" }) {
+                String v = el.hasAttr(attr) ? el.absUrl(attr) : "";
+                if (isUpload(v)) {
+                    found.add(cleanUpload(v));
+                    break;
+                }
+            }
+            if (el.hasAttr("srcset")) {
+                String best = null;
+                long bestWidth = -1;
+                for (String part : el.attr("srcset").split(",")) {
+                    String[] bits = part.trim().split("\\s+");
+                    String candidate = bits[0];
+                    long w = 0;
+                    if (bits.length > 1 && bits[1].matches("\\d+w")) {
+                        w = Long.parseLong(bits[1].replace("w", ""));
+                    }
+                    if (w > bestWidth && isUpload(candidate)) {
+                        best = candidate;
+                        bestWidth = w;
+                    }
+                }
+                if (best != null) {
+                    found.add(cleanUpload(best));
+                }
+            }
+        }
+        if (found.isEmpty()) {
+            Element og = doc.selectFirst("meta[property=og:image]");
+            if (og != null && isUpload(og.attr("content"))) {
+                found.add(cleanUpload(og.attr("content")));
+            }
+        }
+        return new ArrayList<>(found);
+    }
+
+    private static boolean isUpload(String u) {
+        return u != null && u.contains("/wp-content/uploads/")
+                && u.toLowerCase().matches("^[^?#]*\\.(jpe?g|png|gif|webp|mp4|webm)(\\?.*)?$");
+    }
+
+    /** Remove cache-busting parameters and WordPress thumbnail size suffixes (photo-300x200.jpg -> photo.jpg). */
+    private static String cleanUpload(String u) {
+        u = u.replaceAll("\\?.*$", "");
+        return u.replaceAll("-\\d+x\\d+(\\.[A-Za-z0-9]+)$", "$1");
+    }
 }

@@ -25,6 +25,7 @@ package com.rarchives.ripme.tst.ripper.rippers;
 
 import com.rarchives.ripme.ripper.rippers.ThechiveRipper;
 
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -48,7 +49,7 @@ public class ThechiveRipperTest extends RippersTest {
     @Tag("flaky")
     public void testTheChiveRip() throws IOException, URISyntaxException {
         ThechiveRipper ripper = new ThechiveRipper(new URI(
-                "https://thechive.com/2019/03/16/beautiful-badasses-lookin-good-in-and-out-of-uniform-35-photos/").toURL());
+                "https://thechive.com/entertainment/celebrity/william-shatner-might-live-forever/").toURL());
         testRipper(ripper);
     }
 
@@ -56,7 +57,7 @@ public class ThechiveRipperTest extends RippersTest {
     @Tag("flaky")
     public void testTheChiveGif() throws IOException, URISyntaxException {
         ThechiveRipper ripper = new ThechiveRipper(
-                new URI("https://thechive.com/2019/03/14/dont-tease-me-just-squeeze-me-20-gifs/").toURL());
+                new URI("https://thechive.com/funny/top-notch-dank-memes/?utm_postid=5339762&utm_editor=5339762_hendy").toURL());
         testRipper(ripper);
     }
 
@@ -98,6 +99,17 @@ public class ThechiveRipperTest extends RippersTest {
         // Element el = new Element( new Tag("img"), "", new Attributes());
         // String URL = ThechiveRipper.getImageSource(el);
         // assertTrue(URL.equals("https://thechive.files.wordpress.com/2018/10/the-definitive-list-of-the-hottest-horror-movie-babes-11.jpg"));
+    }
+
+    @Test
+    public void testNewStyleUrls() throws IOException, URISyntaxException {
+        ThechiveRipper r1 = new ThechiveRipper(new URI("https://thechive.com/funny/top-notch-dank-memes/?utm_postid=5339762&utm_editor=5339762_hendy").toURL());
+        Assertions.assertEquals("top-notch-dank-memes", r1.getGID(r1.sanitizeURL(r1.getURL())));
+        Assertions.assertEquals("https://thechive.com/funny/top-notch-dank-memes/", r1.getURL().toExternalForm());
+
+        ThechiveRipper r2 = new ThechiveRipper(new URI("https://thechive.com/entertainment/celebrity/william-shatner-might-live-forever/").toURL());
+        Assertions.assertEquals("william-shatner-might-live-forever", r2.getGID(r2.getURL()));
+        Assertions.assertEquals("thechive", r2.getHost());
     }
 
 }
