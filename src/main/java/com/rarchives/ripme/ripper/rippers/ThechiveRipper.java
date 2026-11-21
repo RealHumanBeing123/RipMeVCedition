@@ -32,12 +32,12 @@ public class ThechiveRipper extends AbstractHTMLRipper {
 
     // Posts are thechive.com/CATEGORY/POST/ or thechive.com/CATEGORY/SUBCATEGORY/POST/ (older ones: /YEAR/MONTH/DAY/POST/).
     // Anything after "?" (for example ?utm_postid=...) is ignored.
-    private Pattern p1 = Pattern.compile("^https?://(?:www\\.)?thechive\\.com/(?!(?:tag|author|page|search|wp-content|wp-json)/)"
+    private static final Pattern p1 = Pattern.compile("^https?://(?:www\\.)?thechive\\.com/(?!(?:tag|author|page|search|wp-content|wp-json)/)"
             + "(?:[a-zA-Z0-9_\\-]+/)+([a-zA-Z0-9_\\-]+)/?(?:[?#].*)?$");
-    private Pattern imagePattern = Pattern.compile("<img\\s(?:.|\\n)+?>");
+    private static final Pattern imagePattern = Pattern.compile("<img\\s(?:.|\\n)+?>");
 
     // i.thechive.com specific variables.
-    private Pattern p2 = Pattern.compile("^https?://i.thechive.com/([0-9a-zA-Z_]+)");
+    private static final Pattern p2 = Pattern.compile("^https?://i.thechive.com/([0-9a-zA-Z_]+)");
     private String jsonUrl = "https://i.thechive.com/rest/uploads";
     private Map<String, String> cookies = new HashMap<>();
     private String nextSeed = "";
