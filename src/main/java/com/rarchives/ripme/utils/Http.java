@@ -251,7 +251,8 @@ public class Http {
                 lastException = e;
             }
         }
-        throw new IOException("Failed to load " + url + " after " + this.retries + " attempts", lastException);
+        throw new IOException("Failed to load " + url + " after " + this.retries + " attempts"
+                + (lastException != null ? " (last error: " + lastException.getMessage() + ")" : ""), lastException);
     }
 
     /**

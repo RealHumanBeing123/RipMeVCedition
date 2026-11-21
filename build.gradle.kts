@@ -134,6 +134,20 @@ tasks.register<Test>("testAll") {
   }
 }
 
+// Runs EVERY test against the live sites, including tests switched off with @Disabled and tests tagged
+// flaky/slow. Used by check-sites.bat to find out which sites currently work. Never fails the build.
+tasks.register<Test>("testLive") {
+  testClassesDirs = sourceSets["test"].output.classesDirs
+  classpath = sourceSets["test"].runtimeClasspath
+  useJUnitPlatform {
+    includeTags("any()", "none()")
+    includeEngines("junit-jupiter")
+  }
+  systemProperty("junit.jupiter.conditions.deactivate", "org.junit.*DisabledCondition")
+  systemProperty("junit.jupiter.execution.timeout.default", "150 s")
+  ignoreFailures = true
+}
+
 tasks.register<Test>("testFlaky") {
   useJUnitPlatform {
     includeTags("flaky")
