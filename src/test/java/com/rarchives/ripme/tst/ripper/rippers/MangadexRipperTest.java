@@ -24,4 +24,12 @@ public class MangadexRipperTest extends RippersTest {
         testRipper(ripper);
     }
 
+    @Test
+    public void testGetGID() throws IOException, URISyntaxException {
+        MangadexRipper chapter = new MangadexRipper(new URI("https://mangadex.org/chapter/5e5d1e5e-e8b8-4cd5-a2cd-4c8fd8e4a1a2/1").toURL());
+        org.junit.jupiter.api.Assertions.assertEquals("5e5d1e5e-e8b8-4cd5-a2cd-4c8fd8e4a1a2", chapter.getGID(chapter.getURL()));
+        MangadexRipper title = new MangadexRipper(new URI("https://mangadex.org/title/44625/this-croc-will-die-in-100-days").toURL());
+        org.junit.jupiter.api.Assertions.assertEquals("44625", title.getGID(title.getURL()));
+    }
+
 }
