@@ -454,6 +454,8 @@ public abstract class AbstractRipper
         if (Utils.getConfigBoolean("remember.url_history", true) && !isThisATest()) {
             if (hasDownloadedURL(url.toExternalForm())) {
                 sendUpdate(STATUS.DOWNLOAD_WARN, "Already downloaded " + url.toExternalForm());
+                logger.info("[!] Skipping " + url.toExternalForm() + " -- it is listed in the download history file ("
+                        + URLHistoryFile + "). Delete that file (or the line) to download it again.");
                 alreadyDownloadedUrls += 1;
                 return false;
             }
