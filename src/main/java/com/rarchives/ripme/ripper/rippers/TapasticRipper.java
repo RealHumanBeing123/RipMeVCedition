@@ -174,7 +174,17 @@ public class TapasticRipper extends AbstractHTMLRipper {
                 prefix.append(String.format("-%0" + imgLog + "dof%0" + imgLog + "d-", i + 1, images.size()));
                 prefix.append(episode.filename.replace(" ", "-"));
                 prefix.append("-");
-                addURLToDownload(new URI(images.get(i)).toURL(), prefix.toString());
+                // The signed address carries a long "?__token__=..." part that itself contains slashes, which ends up in
+                // the file name. Name the file after the path alone: e615dba5-...-1.jpg
+                URI imageUri = new URI(images.get(i));
+                String path = imageUri.getPath() == null ? "" : imageUri.getPath();
+                String name = path.substring(path.lastIndexOf('/') + 1);
+                java.util.Map<String, String> options = new java.util.HashMap<>();
+                options.put("prefix", prefix.toString());
+                if (!name.isEmpty()) {
+                    options.put("fileName", name);
+                }
+                addURLToDownload(imageUri.toURL(), options);
                 if (isThisATest()) {
                     break;
                 }
