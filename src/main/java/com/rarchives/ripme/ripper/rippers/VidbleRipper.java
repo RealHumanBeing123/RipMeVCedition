@@ -34,24 +34,109 @@ public class VidbleRipper extends AbstractHTMLRipper {
         return "vidble.com";
     }
 
+    // vidble.com/watch?v=<32 characters>  (video page)
+    private static final Pattern WATCH = Pattern.compile("^https?://(?:www\\.)?vidble\\.com/watch\\?(?:.*&)?v=([A-Za-z0-9]+).*$");
+    // vidble.com/ID.jpg, vidble.com/explore/ID.jpg, vidble.com/ID_med.png, ... (the file itself)
+    private static final Pattern DIRECT = Pattern.compile(
+            "^https?://(?:www\\.)?vidble\\.com/(?:[a-z]+/)*([A-Za-z0-9]+?)(?:_[a-zA-Z]{3,5})?\\.(jpe?g|png|gif|webp|mp4|webm|mov)(?:[?#].*)?$",
+            Pattern.CASE_INSENSITIVE);
+    // vidble.com/show/ID or vidble.com/ID  (a page showing one picture)
+    private static final Pattern SINGLE = Pattern.compile(
+            "^https?://(?:www\\.)?vidble\\.com/(?:show/|explore/)?([A-Za-z0-9]{8,12})/?(?:[?#].*)?$");
+    private static final java.util.Set<String> RESERVED = new java.util.HashSet<>(java.util.Arrays.asList(
+            "favorites", "uploads", "albums", "register", "explore", "signin", "deletion", "termsofservice"));
+
     @Override
     public String getGID(URL url) throws MalformedURLException {
         Pattern p; Matcher m;
+        String u = url.toExternalForm();
 
         p = Pattern.compile("^.*vidble.com/album/([a-zA-Z0-9_\\-]+).*$");
-        m = p.matcher(url.toExternalForm());
+        m = p.matcher(u);
         if (m.matches()) {
             return m.group(1);
         }
+        m = WATCH.matcher(u);
+        if (m.matches()) {
+            return "watch_" + m.group(1);
+        }
+        m = DIRECT.matcher(u);
+        if (m.matches()) {
+            return m.group(1);
+        }
+        m = SINGLE.matcher(u);
+        if (m.matches() && !RESERVED.contains(m.group(1).toLowerCase())) {
+            return m.group(1);
+        }
         throw new MalformedURLException(
-                "Expected vidble.com album format: "
-                        + "vidble.com/album/####"
-                        + " Got: " + url);
+                "Expected a vidble.com album (vidble.com/album/####), video (vidble.com/watch?v=####) "
+                        + "or picture (vidble.com/####.jpg) link. Got: " + url);
+    }
+
+    private static final String DIRECT_ATTR = "data-direct";
+
+    @Override
+    protected Document getFirstPage() throws IOException {
+        Matcher m = DIRECT.matcher(url.toExternalForm());
+        if (m.matches()) {
+            // a link to the file itself: nothing to look up, the file is www.vidble.com/<id>.<ext>
+            Document doc = new Document(url.toExternalForm());
+            doc.body().attr(DIRECT_ATTR, "https://www.vidble.com/" + m.group(1) + "." + m.group(2).toLowerCase());
+            return doc;
+        }
+        return Http.url(url).get();
     }
 
     @Override
     public List<String> getURLsFromPage(Document doc) {
+        if (doc.body() != null && doc.body().hasAttr(DIRECT_ATTR)) {
+            List<String> one = new ArrayList<>();
+            one.add(doc.body().attr(DIRECT_ATTR));
+            return one;
+        }
+        Matcher w = WATCH.matcher(url.toExternalForm());
+        if (w.matches()) {
+            return videoFromWatchPage(doc, w.group(1));
+        }
         return getURLsFromPageStatic(doc);
+    }
+
+    private static final Pattern VIDEO_FILE = Pattern.compile(
+            "(?:https?:)?//[A-Za-z0-9.\\-]*vidble\\.com/[^\"'\\s<>)\\\\]+?\\.(?:mp4|webm|mov)", Pattern.CASE_INSENSITIVE);
+
+    /** The video file of a vidble.com/watch?v=... page. */
+    private static List<String> videoFromWatchPage(Document doc, String id) {
+        List<String> result = new ArrayList<>();
+        for (Element el : doc.select("video source[src], video[src], source[src$=.mp4], source[src$=.webm]")) {
+            String v = el.absUrl("src");
+            if (!v.isEmpty()) {
+                result.add(v);
+                break;
+            }
+        }
+        if (result.isEmpty()) {
+            for (String meta : new String[] { "meta[property=og:video]", "meta[property=og:video:url]",
+                    "meta[property=og:video:secure_url]", "meta[name=twitter:player:stream]" }) {
+                String v = doc.select(meta).attr("content");
+                if (!v.isEmpty()) {
+                    result.add(v.startsWith("//") ? "https:" + v : v);
+                    break;
+                }
+            }
+        }
+        if (result.isEmpty()) {
+            Matcher m = VIDEO_FILE.matcher(doc.html().replace("\\/", "/"));
+            if (m.find()) {
+                String v = m.group();
+                result.add(v.startsWith("//") ? "https:" + v : v);
+            }
+        }
+        if (result.isEmpty()) {
+            // last resort: videos are stored like pictures, as www.vidble.com/<id>.mp4
+            logger.warn("Vidble: no video found on " + doc.location() + ", trying www.vidble.com/" + id + ".mp4");
+            result.add("https://www.vidble.com/" + id + ".mp4");
+        }
+        return result;
     }
 
     private static final Logger logger = LogManager.getLogger(VidbleRipper.class);

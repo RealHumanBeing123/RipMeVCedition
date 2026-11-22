@@ -24,5 +24,14 @@ public class VidbleRipperTest extends RippersTest {
         VidbleRipper ripper = new VidbleRipper(url);
         Assertions.assertEquals("cGEFr8zi", ripper.getGID(url));
     }
-}
 
+    @org.junit.jupiter.api.Test
+    public void testGetGIDForVideoAndDirectLinks() throws java.io.IOException, java.net.URISyntaxException {
+        com.rarchives.ripme.ripper.rippers.VidbleRipper video = new com.rarchives.ripme.ripper.rippers.VidbleRipper(
+                new java.net.URI("https://vidble.com/watch?v=6FImmkCzg3ukzr2DsrrJJ1zt0ZdFc34q").toURL());
+        org.junit.jupiter.api.Assertions.assertEquals("watch_6FImmkCzg3ukzr2DsrrJJ1zt0ZdFc34q", video.getGID(video.getURL()));
+        com.rarchives.ripme.ripper.rippers.VidbleRipper image = new com.rarchives.ripme.ripper.rippers.VidbleRipper(
+                new java.net.URI("https://vidble.com/explore/ERmtOLXaiZ.jpg").toURL());
+        org.junit.jupiter.api.Assertions.assertEquals("ERmtOLXaiZ", image.getGID(image.getURL()));
+    }
+}
