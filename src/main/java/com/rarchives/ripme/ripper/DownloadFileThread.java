@@ -212,6 +212,21 @@ class DownloadFileThread implements Runnable {
                     continue; // retry
                 }
                 if (statusCode / 100 == 4) { // 4xx errors
+                    try {
+                        // Help work out *why* a server refuses us: log who answered and the start of its reply.
+                        StringBuilder why = new StringBuilder("Server=" + huc.getHeaderField("Server")
+                                + ", cf-mitigated=" + huc.getHeaderField("cf-mitigated")
+                                + ", Content-Type=" + huc.getContentType());
+                        java.io.InputStream err = huc.getErrorStream();
+                        if (err != null) {
+                            byte[] buf = err.readNBytes(300);
+                            why.append(", body start: ").append(new String(buf, java.nio.charset.StandardCharsets.UTF_8)
+                                    .replaceAll("\\s+", " "));
+                        }
+                        logger.debug("Refusal details for {}: {}", url, why);
+                    } catch (Exception ignored) {
+                        // diagnostics only
+                    }
                     logger.error("[!] " + Utils.getLocalizedString("nonretriable.status.code") + " " + statusCode
                             + " while downloading from " + url);
                     observer.downloadErrored(ripUrlId, Utils.getLocalizedString("nonretriable.status.code") + " "
