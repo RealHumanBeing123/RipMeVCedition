@@ -53,4 +53,12 @@ public class SiteCookieStorageTest {
         Assertions.assertEquals("tok=x=y=z", cookies.get("token_v2"));
         Assertions.assertEquals("true", cookies.get("seeker_session"));
     }
+
+    @Test
+    public void testNormalizeDomainAcceptsFullAddresses() {
+        Assertions.assertEquals("danbooru.donmai.us", SiteCookieStorage.normalizeDomain("https://danbooru.donmai.us"));
+        Assertions.assertEquals("danbooru.donmai.us", SiteCookieStorage.normalizeDomain("https://danbooru.donmai.us/posts/1?x=2"));
+        Assertions.assertEquals("reddit.com", SiteCookieStorage.normalizeDomain(" HTTPS://www.reddit.com:443/r/x "));
+        Assertions.assertEquals("example.com", SiteCookieStorage.normalizeDomain("*.example.com"));
+    }
 }

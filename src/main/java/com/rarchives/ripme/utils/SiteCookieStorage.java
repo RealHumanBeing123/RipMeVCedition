@@ -16,6 +16,16 @@ public final class SiteCookieStorage {
 
     public static String normalizeDomain(String domain) {
         String normalized = domain.trim().toLowerCase();
+        // People often paste a whole address ("https://danbooru.donmai.us/posts/1"); keep only the host name,
+        // because the result is used in a file name where ':' and '/' are not allowed.
+        int scheme = normalized.indexOf("://");
+        if (scheme >= 0) {
+            normalized = normalized.substring(scheme + 3);
+        }
+        normalized = normalized.replaceFirst("[/?#].*$", "");
+        normalized = normalized.replaceFirst("^[^@]*@", "");
+        normalized = normalized.replaceFirst(":[0-9]*$", "");
+        normalized = normalized.replaceFirst("^(\\*\\.|\\.)+", "");
         if (normalized.startsWith("www.")) {
             normalized = normalized.substring(4);
         }
