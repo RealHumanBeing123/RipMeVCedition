@@ -30,27 +30,14 @@ If the site that you want isn't supported then open one of those support ticket 
 The list of supported rippers includes:
 
 - imgur
-- twitter (currently broken, needs to be updated for X)
+- twitter (needs an API key)
 - tumblr
-- instagram
+- instagram (needs an API key)
 - flickr
 - photobucket
-- reddit
-- deviantart (currently broken by major changes to the site)
+- reddit (uses browser cookies)
+- deviantart (can only download single images and the first 10 in a gallery)
 - [etc](https://github.com/ripmeapp/ripme/wiki/Supported-Sites)
-
-## Sites Answering "Status Code 403"
-
-Some sites refuse requests that do not carry the session cookies of a logged-in browser. RipMe can borrow those cookies from the browser you already use:
-
-1. Log in to the site in Firefox, Edge, Chrome or Brave.
-2. In RipMe open *Configuration → Site cookies...*, enter the domain (for example `reddit.com`)    and press **Import from browser**.
-
-RipMe reads only the cookies of that one site, from the browser that is currently running (or any
-installed one), and stores them on your computer next to the manually entered cookies. Tick
-*Automatically import browser cookies when a site answers 401/403* to have RipMe do this by
-itself the first time a site answers 401/403 (off by default).
-
 
 Support by browser:
 
@@ -67,6 +54,18 @@ If your browser cannot be read, use Firefox for the login, or copy the `Cookie` 
 
 Some sites like tumblr, twitter (X), instagram, and a few others require a new API key. I included my own that I requested, but it could get rate limited or revoked if too many people use it. So, I suggest that you request your own API key.
 After getting your own API key go to ```C:\Users\YourName\AppData\Local\ripme``` and change the ```tumblr.auth = APIkeyHere``` to include everything after the ```= ``` then hit save. You will be able to access the content of that website now.
+
+## Sites Answering "Status Code 403"
+
+Some sites refuse requests that do not carry the session cookies of a logged-in browser. RipMe can borrow those cookies from the browser you already use:
+
+1. Log in to the site in Firefox, Edge, Chrome or Brave.
+2. In RipMe open *Configuration → Site cookies...*, enter the domain (for example `reddit.com`)    and press **Import from browser**.
+
+RipMe reads only the cookies of that one site, from the browser that is currently running (or any
+installed one), and stores them on your computer next to the manually entered cookies. Tick
+*Automatically import browser cookies when a site answers 401/403* to have RipMe do this by
+itself the first time a site answers 401/403 (off by default).
 
 ## Sites that currently don't work
 
