@@ -39,6 +39,15 @@ public class DanbooruRipperTest extends RippersTest {
     }
 
     @Test
+    public void testGetGIDSinglePost() throws IOException, URISyntaxException {
+        URL u = new URI("https://danbooru.donmai.us/posts/12599925").toURL();
+        DanbooruRipper r = new DanbooruRipper(u);
+        Assertions.assertEquals("post_12599925", r.getGID(u));
+        URL u2 = new URI("https://danbooru.donmai.us/posts/12599925?q=abc").toURL();
+        Assertions.assertEquals("post_12599925", new DanbooruRipper(u2).getGID(u2));
+    }
+
+    @Test
     public void testGetHost() throws IOException, URISyntaxException {
         URL danBooruUrl = new URI("https://danbooru.donmai.us/posts?tags=brown_necktie").toURL();
 

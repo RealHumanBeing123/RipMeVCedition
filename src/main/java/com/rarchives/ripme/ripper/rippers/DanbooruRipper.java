@@ -34,6 +34,11 @@ public class DanbooruRipper extends AbstractJSONRipper {
 
     private Pattern gidPattern = null;
 
+    // Single post link, e.g. https://danbooru.donmai.us/posts/12599925 (static: the
+    // constructor calls getGID before instance fields are set up)
+    private static final Pattern POST_PATTERN =
+            Pattern.compile("^https?://danbooru\\.donmai\\.us/posts/([0-9]+)(?:[/?#].*)?$");
+
     private int currentPageNum = 1;
 
     public DanbooruRipper(URL url) throws IOException {
@@ -54,7 +59,16 @@ public class DanbooruRipper extends AbstractJSONRipper {
         return HOST;
     }
 
+    private String getPostId(URL url) {
+        Matcher m = POST_PATTERN.matcher(url.toExternalForm());
+        return m.matches() ? m.group(1) : null;
+    }
+
     private String getPage(int num) throws MalformedURLException {
+        String postId = getPostId(url);
+        if (postId != null) {
+            return "https://" + getDomain() + "/posts/" + postId + ".json";
+        }
         return "https://" + getDomain() + "/posts.json?page=" + num + "&tags=" + getTag(url);
     }
 
@@ -89,7 +103,14 @@ public class DanbooruRipper extends AbstractJSONRipper {
             if (!response.isSuccessful()) throw new IOException("Unexpected code " + response);
 
             String responseData = response.body().string();
-            JSONArray jsonArray = new JSONArray(responseData);
+            JSONArray jsonArray;
+            if (getPostId(url) != null) {
+                // A single post comes back as one object, not a list.
+                if (currentPageNum > 2) return null; // already fetched it
+                jsonArray = new JSONArray().put(new JSONObject(responseData));
+            } else {
+                jsonArray = new JSONArray(responseData);
+            }
             if(!jsonArray.isEmpty()){
                 String newCompatibleJSON = "{ \"resources\":" + jsonArray + " }";
                 return new JSONObject(newCompatibleJSON);
@@ -109,8 +130,11 @@ public class DanbooruRipper extends AbstractJSONRipper {
         List<String> res = new ArrayList<>(100);
         JSONArray jsonArray = json.getJSONArray("resources");
         for (int i = 0; i < jsonArray.length(); i++) {
-            if (jsonArray.getJSONObject(i).has("file_url")) {
-                res.add(jsonArray.getJSONObject(i).getString("file_url"));
+            JSONObject post = jsonArray.getJSONObject(i);
+            if (post.has("file_url") && !post.isNull("file_url")) {
+                res.add(post.getString("file_url"));
+            } else if (post.has("large_file_url") && !post.isNull("large_file_url")) {
+                res.add(post.getString("large_file_url"));
             }
         }
         return res;
@@ -118,6 +142,10 @@ public class DanbooruRipper extends AbstractJSONRipper {
 
     @Override
     public String getGID(URL url) throws MalformedURLException {
+        String postId = getPostId(url);
+        if (postId != null) {
+            return "post_" + postId;
+        }
         try {
             return Utils.filesystemSafe(new URI(getTag(url).replaceAll("([?&])tags=", "")).getPath());
         } catch (URISyntaxException ex) {
@@ -140,6 +168,6 @@ public class DanbooruRipper extends AbstractJSONRipper {
             return m.group(3);
         }
 
-        throw new MalformedURLException("Expected danbooru URL format: " + getDomain() + "/posts?tags=searchterm - got " + url + " instead");
+        throw new MalformedURLException("Expected danbooru URL format: " + getDomain() + "/posts?tags=searchterm or " + getDomain() + "/posts/12345 - got " + url + " instead");
     }
 }
