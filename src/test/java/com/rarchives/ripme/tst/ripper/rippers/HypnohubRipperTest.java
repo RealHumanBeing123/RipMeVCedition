@@ -34,4 +34,13 @@ public class HypnohubRipperTest extends RippersTest {
         HypnohubRipper postRipper = new HypnohubRipper(postURL);
         Assertions.assertEquals("post&s=view&id=234499&pool_id=6717", postRipper.getGID(postURL));
     }
+
+    @Test
+    public void testGetGIDArtistAndTagList() throws IOException, URISyntaxException {
+        URL artistURL = new URI("https://hypnohub.net/index.php?page=artist&s=show&id=2022").toURL();
+        Assertions.assertEquals("artist_2022", new HypnohubRipper(artistURL).getGID(artistURL));
+
+        URL listURL = new URI("https://hypnohub.net/index.php?page=post&s=list&tags=hypnoink").toURL();
+        Assertions.assertEquals("tags_hypnoink", new HypnohubRipper(listURL).getGID(listURL));
+    }
 }
