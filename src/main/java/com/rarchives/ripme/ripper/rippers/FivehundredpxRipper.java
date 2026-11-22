@@ -161,16 +161,32 @@ public class FivehundredpxRipper extends AbstractJSONRipper {
     /** Convert username to UserID. */
     private String getUserID(String username) throws IOException {
         logger.info("Fetching user ID for " + username);
-        JSONObject json = new Http("https://api.500px.com/v1/" +
-                    "users/show" +
-                    "?username=" + username +
-                    "&consumer_key=" + CONSUMER_KEY)
-                .getJSON();
-        return Long.toString(json.getJSONObject("user").getLong("id"));
+        try {
+            JSONObject json = new Http("https://api.500px.com/v1/" +
+                        "users/show" +
+                        "?username=" + username +
+                        "&consumer_key=" + CONSUMER_KEY)
+                    .getJSON();
+            return Long.toString(json.getJSONObject("user").getLong("id"));
+        } catch (org.json.JSONException e) {
+            throw new IOException(CLOSED_MESSAGE, e);
+        }
     }
+
+    private static final String CLOSED_MESSAGE = "500px shut down the public API that this ripper uses, so 500px pages "
+            + "can no longer be ripped with ripme (the answer is a web page instead of data). Only a rewrite for 500px's newer "
+            + "interface could fix this.";
 
     @Override
     public JSONObject getFirstPage() throws IOException, URISyntaxException {
+        try {
+            return loadFirstPage();
+        } catch (org.json.JSONException e) {
+            throw new IOException(CLOSED_MESSAGE, e);
+        }
+    }
+
+    private JSONObject loadFirstPage() throws IOException, URISyntaxException {
         URL apiURL = new URI(baseURL + "&consumer_key=" + CONSUMER_KEY).toURL();
         logger.debug("apiURL: " + apiURL);
         JSONObject json = Http.url(apiURL).getJSON();

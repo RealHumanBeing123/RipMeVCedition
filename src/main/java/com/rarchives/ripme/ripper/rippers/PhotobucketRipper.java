@@ -132,6 +132,16 @@ public class PhotobucketRipper extends AbstractHTMLRipper {
 
     @Override
     public Document getFirstPage() throws IOException {
+        try {
+            return loadFirstPage();
+        } catch (org.json.JSONException e) {
+            throw new IOException("Photobucket no longer answers the requests this ripper uses (it returned a web page instead of "
+                    + "album data; Photobucket now requires a login to view most albums). Photobucket albums cannot be ripped "
+                    + "with ripme at the moment.", e);
+        }
+    }
+
+    private Document loadFirstPage() throws IOException {
         if (this.currAlbum == null) {
             this.albums = getAlbumMetadata(this.url.toExternalForm());
             logger.info("Detected " + albums.size() + " albums in total");
