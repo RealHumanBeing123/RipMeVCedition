@@ -160,7 +160,14 @@ class DownloadFileThread implements Runnable {
                 if (!referrer.equals("")) {
                     huc.setRequestProperty("Referer", referrer); // Sic
                 }
-                huc.setRequestProperty("User-agent", AbstractRipper.USER_AGENT);
+                String host = url.getHost() == null ? "" : url.getHost().toLowerCase();
+                if (host.endsWith("donmai.us")) {
+                    // Danbooru's image server refuses the desktop-browser user agent (403) but accepts the
+                    // same mobile user agent its API accepts.
+                    huc.setRequestProperty("User-agent", "Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.0 Mobile/15E148 Safari/604.1");
+                } else {
+                    huc.setRequestProperty("User-agent", AbstractRipper.USER_AGENT);
+                }
                 // Cookies saved under Configuration → Site cookies apply to file downloads too;
                 // cookies set explicitly by the ripper take precedence.
                 Map<String, String> requestCookies = new HashMap<>(Http.cookiesForURL(url.toExternalForm()));
