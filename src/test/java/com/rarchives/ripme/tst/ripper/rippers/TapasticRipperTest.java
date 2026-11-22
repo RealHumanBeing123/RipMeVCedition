@@ -12,7 +12,7 @@ import org.junit.jupiter.api.Test;
 
 public class TapasticRipperTest extends RippersTest {
     @Test
-    @Disabled("ripper broken")
+    @org.junit.jupiter.api.Tag("flaky")
     public void testTapasticRip() throws IOException, URISyntaxException {
         TapasticRipper ripper = new TapasticRipper(new URI("https://tapas.io/series/TPIAG").toURL());
         testRipper(ripper);

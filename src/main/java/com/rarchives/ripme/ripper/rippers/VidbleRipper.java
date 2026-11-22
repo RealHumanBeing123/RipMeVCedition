@@ -60,7 +60,7 @@ public class VidbleRipper extends AbstractHTMLRipper {
     private static String imageAddress(Element img) {
         for (String attr : new String[] { "data-src", "data-original", "data-lazy-src", "src" }) {
             String v = img.absUrl(attr);
-            if (!v.isEmpty() && !v.startsWith("data:")) {
+            if (!v.isEmpty() && !v.startsWith("data:") && !v.contains("TkIDtImlZQ")) { // TkIDtImlZQ is the lazy-load placeholder
                 return v;
             }
         }
