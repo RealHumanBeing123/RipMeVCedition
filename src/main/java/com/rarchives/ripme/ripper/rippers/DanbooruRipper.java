@@ -6,6 +6,8 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
@@ -157,7 +159,12 @@ public class DanbooruRipper extends AbstractJSONRipper {
 
     @Override
     protected void downloadURL(URL url, int index) {
-        addURLToDownload(url, getPrefix(index));
+        // Danbooru's image server (cdn.donmai.us) answers 403 unless the request
+        // says it came from the Danbooru site, so send a Referer.
+        Map<String, String> options = new HashMap<>();
+        options.put("prefix", getPrefix(index));
+        options.put("referrer", "https://" + DOMAIN + "/");
+        addURLToDownload(url, options);
     }
 
     private String getTag(URL url) throws MalformedURLException {
