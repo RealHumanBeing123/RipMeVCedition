@@ -161,7 +161,7 @@ class DownloadFileThread implements Runnable {
                     huc.setRequestProperty("Referer", referrer); // Sic
                 }
                 String host = url.getHost() == null ? "" : url.getHost().toLowerCase();
-                if (host.endsWith("donmai.us")) {
+                if (host.endsWith("donmai.us") || host.endsWith("mangadex.org") || host.endsWith("mangadex.network")) {
                     // Cloudflare in front of Danbooru's image server challenges (403) requests that claim to be
                     // a web browser but don't behave like one. A plain command-line client identity is let
                     // through (verified with curl), so use that.

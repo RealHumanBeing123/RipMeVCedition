@@ -182,6 +182,10 @@ public class DeviantartRipper extends AbstractHTMLRipper {
 			tmpCookies.putAll(res.cookies());
 
 			Element form = doc.getElementById("login");
+			if (form == null) {
+				throw new IOException("DeviantArt no longer shows the old login form, so this ripper cannot log in. "
+						+ "DeviantArt galleries are not supported by this version.");
+			}
 			String token = form.select("input[name=\"validate_token\"]").first().attr("value");
 			String key = form.select("input[name=\"validate_key\"]").first().attr("value");
 			logger.info("Token: " + token + " & Key: " + key);

@@ -61,8 +61,20 @@ public class MangadexRipper extends AbstractJSONRipper {
         throw new MalformedURLException("Expected mangadex.org/title/ID/name or mangadex.org/chapter/ID, got " + url);
     }
 
+    private static final String API_USER_AGENT = "RipMeVCedition/1.0 (+https://github.com/RealHumanBeing123/RipMeVCedition)";
+
     private JSONObject api(String path) throws IOException {
-        return Http.url(API + path).header("Accept", "application/json").getJSON();
+        // MangaDex asks API clients to identify themselves honestly; a fake browser identity gets a
+        // Cloudflare challenge page instead of JSON.
+        Http http = Http.url(API + path).userAgent(API_USER_AGENT).header("Accept", "application/json").ignoreContentType();
+        String body = http.response().body();
+        try {
+            return new JSONObject(body);
+        } catch (org.json.JSONException e) {
+            String start = body.length() > 120 ? body.substring(0, 120) : body;
+            throw new IOException("MangaDex did not answer with data (it may be blocking this program, e.g. a Cloudflare check). "
+                    + "Reply started with: " + start.replaceAll("\\s+", " "), e);
+        }
     }
 
     /** Old numeric MangaDex numbers are translated to the new UUIDs. */
