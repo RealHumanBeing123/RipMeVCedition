@@ -10,6 +10,8 @@ import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
@@ -52,20 +54,42 @@ public class VidbleRipper extends AbstractHTMLRipper {
         return getURLsFromPageStatic(doc);
     }
 
-    private static List<String> getURLsFromPageStatic(Document doc) {
-        List<String> imageURLs = new ArrayList<>();
-        Elements els = doc.select("#ContentPlaceHolder1_divContent");
-        Elements imgs = els.select("img");
-        for (Element img : imgs) {
-            String src = img.absUrl("src");
-            src = src.replaceAll("_[a-zA-Z]{3,5}", "");
+    private static final Logger logger = LogManager.getLogger(VidbleRipper.class);
 
-            if (!src.equals("")) {
+    /** First usable address of a (possibly lazy-loaded) picture, as an absolute URL. */
+    private static String imageAddress(Element img) {
+        for (String attr : new String[] { "data-src", "data-original", "data-lazy-src", "src" }) {
+            String v = img.absUrl(attr);
+            if (!v.isEmpty() && !v.startsWith("data:")) {
+                return v;
+            }
+        }
+        return "";
+    }
+
+    private static List<String> getURLsFromPageStatic(Document doc) {
+        java.util.LinkedHashSet<String> imageURLs = new java.util.LinkedHashSet<>();
+        Elements imgs = doc.select("#ContentPlaceHolder1_divContent img");
+        if (imgs.isEmpty()) {
+            // layout changed: take the pictures that are hosted on vidble itself (not logos or ads)
+            imgs = doc.select("img[src*=vidble.com/], img[data-src*=vidble.com/]");
+        }
+        for (Element img : imgs) {
+            String src = imageAddress(img);
+            // thumbnails carry a size suffix such as _med or _sml; the original has none
+            src = src.replaceAll("_[a-zA-Z]{3,5}(?=\\.[A-Za-z0-9]+(\\?.*)?$)", "");
+            if (!src.isEmpty() && src.matches("(?i)^[^?#]*\\.(jpe?g|png|gif|webp|mp4|webm)(\\?.*)?$")) {
                 imageURLs.add(src);
             }
         }
-        return imageURLs;
-   }
+        if (imageURLs.isEmpty()) {
+            logger.warn("Vidble: no pictures recognised on " + doc.location() + " (page has " + doc.select("img").size()
+                    + " img tags). First ones: " + doc.select("img").stream().limit(6)
+                            .map(e -> e.outerHtml().length() > 200 ? e.outerHtml().substring(0, 200) : e.outerHtml())
+                            .collect(java.util.stream.Collectors.joining("\n   ")));
+        }
+        return new ArrayList<>(imageURLs);
+    }
 
     @Override
     public void downloadURL(URL url, int index) {

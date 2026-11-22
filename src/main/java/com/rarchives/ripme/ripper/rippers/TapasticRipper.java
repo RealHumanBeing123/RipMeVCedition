@@ -55,17 +55,37 @@ public class TapasticRipper extends AbstractHTMLRipper {
     public List<String> getURLsFromPage(Document page) {
         List<String> urls = new ArrayList<>();
         String html = page.data();
-        if (!html.contains("episodeList : ")) {
-            logger.error("No 'episodeList' found at " + this.url);
-            return urls;
+        if (html.contains("episodeList : ")) {
+            try {
+                String jsonString = Utils.between(html, "episodeList : ", ",\n").get(0);
+                JSONArray json = new JSONArray(jsonString);
+                for (int i = 0; i < json.length(); i++) {
+                    JSONObject obj = json.getJSONObject(i);
+                    TapasticEpisode episode = new TapasticEpisode(i, obj.getInt("id"), obj.getString("title"));
+                    episodes.add(episode);
+                    urls.add("https://tapas.io/episode/" + episode.id);
+                }
+            } catch (RuntimeException e) {
+                logger.warn("Could not read the 'episodeList' of " + this.url, e);
+                episodes.clear();
+                urls.clear();
+            }
         }
-        String jsonString = Utils.between(html, "episodeList : ", ",\n").get(0);
-        JSONArray json = new JSONArray(jsonString);
-        for (int i = 0; i < json.length(); i++) {
-            JSONObject obj = json.getJSONObject(i);
-            TapasticEpisode episode = new TapasticEpisode(i, obj.getInt("id"), obj.getString("title"));
-            episodes.add(episode);
-            urls.add("http://tapastic.com/episode/" + episode.id);
+        if (urls.isEmpty()) {
+            // newer layout: the episode list is made of links to /episode/ID
+            java.util.Set<Integer> seen = new java.util.LinkedHashSet<>();
+            for (org.jsoup.nodes.Element a : page.select("a[href*=/episode/]")) {
+                Matcher m = Pattern.compile("/episode/(\\d+)").matcher(a.attr("href"));
+                if (m.find() && seen.add(Integer.parseInt(m.group(1)))) {
+                    int id = Integer.parseInt(m.group(1));
+                    String title = a.text().trim().isEmpty() ? String.valueOf(id) : a.text().trim();
+                    episodes.add(new TapasticEpisode(episodes.size(), id, title));
+                    urls.add("https://tapas.io/episode/" + id);
+                }
+            }
+        }
+        if (urls.isEmpty()) {
+            logger.error("Tapas: no episodes recognised at " + this.url + " (page has " + page.select("a").size() + " links)");
         }
         return urls;
     }
@@ -75,11 +95,17 @@ public class TapasticRipper extends AbstractHTMLRipper {
         try {
             Document doc = Http.url(url).get();
             Elements images = doc.select("article.ep-contents img");
+            if (images.isEmpty()) {
+                images = doc.select("img.content__img, .viewer img, article img");
+            }
             // Find maximum # of images for optimal filename indexing
+            if (images.isEmpty()) {
+                logger.error("Tapas: no pictures recognised on " + url);
+            }
             int epiLog = (int) (Math.floor(Math.log10(episodes.size())) + 1),
                 imgLog = (int) (Math.floor(Math.log10(images.size()  )) + 1);
             for (int i = 0; i < images.size(); i++) {
-                String link = images.get(i).attr("src");
+                String link = images.get(i).hasAttr("data-src") ? images.get(i).absUrl("data-src") : images.get(i).absUrl("src");
                 TapasticEpisode episode = episodes.get(index - 1);
                 // Build elaborate filename prefix
                 StringBuilder prefix = new StringBuilder();
