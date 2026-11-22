@@ -162,9 +162,10 @@ class DownloadFileThread implements Runnable {
                 }
                 String host = url.getHost() == null ? "" : url.getHost().toLowerCase();
                 if (host.endsWith("donmai.us")) {
-                    // Danbooru's image server refuses the desktop-browser user agent (403) but accepts the
-                    // same mobile user agent its API accepts.
-                    huc.setRequestProperty("User-agent", "Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.0 Mobile/15E148 Safari/604.1");
+                    // Cloudflare in front of Danbooru's image server challenges (403) requests that claim to be
+                    // a web browser but don't behave like one. A plain command-line client identity is let
+                    // through (verified with curl), so use that.
+                    huc.setRequestProperty("User-agent", "curl/8.4.0");
                 } else {
                     huc.setRequestProperty("User-agent", AbstractRipper.USER_AGENT);
                 }
