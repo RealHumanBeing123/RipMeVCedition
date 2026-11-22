@@ -114,6 +114,12 @@ public class DeviantartRipper extends AbstractHTMLRipper {
 	}
 
 	@Override
+	public boolean canRip(URL url) {
+		// Replaced by DeviantartGalleryRipper and DeviantartArtRipper (this one logs in through a page that no longer exists).
+		return false;
+	}
+
+	@Override
 	public String getHost() {
 		return "deviantart";
 	}

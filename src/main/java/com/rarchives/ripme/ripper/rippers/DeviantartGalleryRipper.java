@@ -55,6 +55,12 @@ public class DeviantartGalleryRipper extends AbstractJSONRipper {
     }
 
     @Override
+    public boolean canRip(URL url) {
+        // The ripper factory picks the first ripper whose canRip says yes, so match the address shape, not just the site.
+        return GALLERY.matcher(url.toExternalForm()).matches();
+    }
+
+    @Override
     public String getGID(URL url) throws MalformedURLException {
         Matcher m = GALLERY.matcher(url.toExternalForm());
         if (m.matches()) {
