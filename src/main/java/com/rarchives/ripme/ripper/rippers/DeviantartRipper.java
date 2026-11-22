@@ -318,6 +318,11 @@ public class DeviantartRipper extends AbstractHTMLRipper {
 	 */
 	@Override
 	public String getGID(URL url) throws MalformedURLException {
+		// This old ripper logs in through a page DeviantArt no longer has. Refusing every address here lets
+		// DeviantartGalleryRipper (galleries) and DeviantartArtRipper (single artworks) take over.
+		if (url != null) {
+			throw new MalformedURLException("Replaced by DeviantartGalleryRipper and DeviantartArtRipper - got " + url);
+		}
 		String s = url.toExternalForm();
 		String artist = "unknown";
 		String what = "unknown";

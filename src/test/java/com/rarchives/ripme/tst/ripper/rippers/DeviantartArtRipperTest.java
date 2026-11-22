@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
 import com.rarchives.ripme.ripper.rippers.DeviantartArtRipper;
+import com.rarchives.ripme.ripper.rippers.DeviantartGalleryRipper;
 import com.rarchives.ripme.ripper.rippers.FivehundredpxPhotoRipper;
 
 public class DeviantartArtRipperTest {
@@ -24,5 +25,15 @@ public class DeviantartArtRipperTest {
     public void testFivehundredpxPhotoGid() throws IOException, URISyntaxException {
         URL u = new URI("https://500px.com/photo/azrKSPoE4vH").toURL();
         Assertions.assertEquals("photo_azrKSPoE4vH", new FivehundredpxPhotoRipper(u).getGID(u));
+    }
+
+    @Test
+    public void testGalleryGid() throws IOException, URISyntaxException {
+        URL all = new URI("https://www.deviantart.com/yolabayola1/gallery").toURL();
+        Assertions.assertEquals("yolabayola1_gallery_all", new DeviantartGalleryRipper(all).getGID(all));
+        URL folder = new URI("https://www.deviantart.com/yolabayola1/gallery/81494518/featured").toURL();
+        Assertions.assertEquals("yolabayola1_gallery_81494518", new DeviantartGalleryRipper(folder).getGID(folder));
+        Assertions.assertThrows(java.net.MalformedURLException.class, () -> new DeviantartGalleryRipper(
+                new URI("https://www.deviantart.com/yolabayola1/art/Pounced-1020701055").toURL()));
     }
 }

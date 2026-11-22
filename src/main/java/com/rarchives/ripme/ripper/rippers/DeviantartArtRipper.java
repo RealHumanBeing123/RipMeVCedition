@@ -63,7 +63,7 @@ public class DeviantartArtRipper extends AbstractHTMLRipper {
      * Returns the text of the string literal in  __INITIAL_STATE__ = JSON.parse("...")  (still escaped),
      * or null. Done by hand because the literal is about 1 MB long, which overflows regular expressions.
      */
-    static String stateLiteral(String script) {
+    public static String stateLiteral(String script) {
         int at = script.indexOf("__INITIAL_STATE__");
         if (at < 0) {
             return null;
@@ -86,7 +86,7 @@ public class DeviantartArtRipper extends AbstractHTMLRipper {
     }
 
     /** Turns the JavaScript string literal inside JSON.parse("...") into the JSON text it holds. */
-    static String unescapeJsString(String raw) {
+    public static String unescapeJsString(String raw) {
         StringBuilder out = new StringBuilder();
         for (int i = 0; i < raw.length(); i++) {
             char c = raw.charAt(i);
@@ -122,7 +122,11 @@ public class DeviantartArtRipper extends AbstractHTMLRipper {
         if (deviations == null) {
             return null;
         }
-        JSONObject dev = deviations.optJSONObject(id);
+        return pictureFromDeviation(deviations.optJSONObject(id));
+    }
+
+    /** Best picture address for one deviation object (from the page data or the gallery API). */
+    public static String pictureFromDeviation(JSONObject dev) {
         if (dev == null) {
             return null;
         }

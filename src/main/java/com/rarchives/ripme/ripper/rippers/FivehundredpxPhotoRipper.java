@@ -46,7 +46,12 @@ public class FivehundredpxPhotoRipper extends AbstractHTMLRipper {
 
     @Override
     protected Document getFirstPage() throws IOException, URISyntaxException {
-        return Http.url(url).get();
+        Document page = Http.url(url).get();
+        if (getURLsFromPage(page).isEmpty()) {
+            throw new IOException("500px builds its pages with JavaScript, so the photo is not in the page RipMe receives. "
+                    + "This version cannot download 500px photos, galleries or favorites.");
+        }
+        return page;
     }
 
     @Override
