@@ -1,7 +1,6 @@
 # RipMe Vibe Coded Edition
 
-Hi this is a ripme fork where I vibecoded a fix for the famous 403 error which really annoyed me when trying to download stuff.
-## DO NOT CLICK THE UPDATE BUTTON WITHIN THE SOFTWARE OR ELSE IT CHANGES TO THE REGULAR VERSION OF RIPME WITHOUT THiS FIX OF MINE. 
+Hi this is a ripme fork where I initially vibecoded a fix for the famous 403 error which really annoyed me when trying to download stuff. Now, I am fixing the rippers of a bunch of other websites that I have never even heard of.
 
 [Here's the link to the original ripme page](https://github.com/RipMeApp/ripme)
 
@@ -19,7 +18,7 @@ Screenshots:
 
 Requires Java 25 or later to run. RipMe has been tested on and is confirmed working on Windows, Linux, and Mac.
 
-Java 27 is the most modern possible Java version that allows us to support the most platforms; it's the default JDK on current Debian stable. S
+Java 27 is the most modern possible Java version that allows it to run on most platforms; it's the default JDK on current Debian stable. S
 
 ## Supported Sites
 Jump to:
