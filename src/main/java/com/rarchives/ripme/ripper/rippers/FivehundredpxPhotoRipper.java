@@ -38,7 +38,16 @@ public class FivehundredpxPhotoRipper extends AbstractHTMLRipper {
     @Override
     public boolean canRip(URL url) {
         // The ripper factory picks the first ripper whose canRip says yes, so match the address shape, not just the site.
-        return PHOTO.matcher(url.toExternalForm()).matches();
+        // Claims every 500px address so that galleries and favorites get the clear explanation below
+        // instead of a confusing error from the old, broken ripper.
+        return url.getHost() != null && url.getHost().toLowerCase().endsWith("500px.com");
+    }
+
+    @Override
+    public boolean canRip(URL url) {
+        // Claims every 500px address so that galleries and favorites get the clear explanation below
+        // instead of a confusing error from the old, broken ripper.
+        return url.getHost() != null && url.getHost().toLowerCase().endsWith("500px.com");
     }
 
     @Override
@@ -47,7 +56,11 @@ public class FivehundredpxPhotoRipper extends AbstractHTMLRipper {
         if (m.matches()) {
             return "photo_" + m.group(1);
         }
-        throw new MalformedURLException("Expected 500px.com/photo/<id> - got " + url);
+        String path = url.getPath() == null ? "" : url.getPath().replaceAll("[^A-Za-z0-9]+", "_");
+        if (path.isEmpty() || path.equals("_")) {
+            throw new MalformedURLException("Expected a 500px.com address - got " + url);
+        }
+        return "page" + path;
     }
 
     @Override

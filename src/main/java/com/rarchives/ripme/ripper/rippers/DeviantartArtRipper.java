@@ -52,6 +52,11 @@ public class DeviantartArtRipper extends AbstractHTMLRipper {
     }
 
     @Override
+    public boolean canRip(URL url) {
+        return ART.matcher(url.toExternalForm()).matches();
+    }
+
+    @Override
     public String getGID(URL url) throws MalformedURLException {
         Matcher m = ART.matcher(url.toExternalForm());
         if (m.matches()) {

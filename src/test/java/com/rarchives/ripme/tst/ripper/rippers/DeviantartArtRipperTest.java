@@ -33,7 +33,10 @@ public class DeviantartArtRipperTest {
         Assertions.assertEquals("yolabayola1_gallery_all", new DeviantartGalleryRipper(all).getGID(all));
         URL folder = new URI("https://www.deviantart.com/yolabayola1/gallery/81494518/featured").toURL();
         Assertions.assertEquals("yolabayola1_gallery_81494518", new DeviantartGalleryRipper(folder).getGID(folder));
-        Assertions.assertThrows(java.net.MalformedURLException.class, () -> new DeviantartGalleryRipper(
+        Assertions.assertFalse(new DeviantartGalleryRipper(all).canRip(new URI("https://www.deviantart.com/yolabayola1/art/Pounced-1020701055").toURL()));
+        Assertions.assertFalse(new DeviantartArtRipper(new URI("https://www.deviantart.com/yolabayola1/art/Pounced-1020701055").toURL())
+                .canRip(all));
+        Assertions.assertThrows(Exception.class, () -> new DeviantartGalleryRipper(
                 new URI("https://www.deviantart.com/yolabayola1/art/Pounced-1020701055").toURL()));
     }
 }

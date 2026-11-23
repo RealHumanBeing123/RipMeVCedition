@@ -63,6 +63,12 @@ public class FivehundredpxRipper extends AbstractJSONRipper {
     }
 
     @Override
+    public boolean canRip(URL url) {
+        // Replaced by FivehundredpxPhotoRipper, which explains that 500px cannot be read.
+        return false;
+    }
+
+    @Override
     public String getGID(URL url) throws MalformedURLException {
         Pattern p; Matcher m;
 

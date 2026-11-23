@@ -61,6 +61,11 @@ public class DeviantartGalleryRipper extends AbstractJSONRipper {
     }
 
     @Override
+    public boolean canRip(URL url) {
+        return GALLERY.matcher(url.toExternalForm()).matches();
+    }
+
+    @Override
     public String getGID(URL url) throws MalformedURLException {
         Matcher m = GALLERY.matcher(url.toExternalForm());
         if (m.matches()) {
