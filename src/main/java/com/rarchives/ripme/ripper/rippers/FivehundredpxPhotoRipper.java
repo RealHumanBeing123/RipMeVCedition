@@ -44,13 +44,6 @@ public class FivehundredpxPhotoRipper extends AbstractHTMLRipper {
     }
 
     @Override
-    public boolean canRip(URL url) {
-        // Claims every 500px address so that galleries and favorites get the clear explanation below
-        // instead of a confusing error from the old, broken ripper.
-        return url.getHost() != null && url.getHost().toLowerCase().endsWith("500px.com");
-    }
-
-    @Override
     public String getGID(URL url) throws MalformedURLException {
         Matcher m = PHOTO.matcher(url.toExternalForm());
         if (m.matches()) {
