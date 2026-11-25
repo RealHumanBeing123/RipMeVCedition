@@ -252,6 +252,9 @@ public class PhotobucketRipper extends AbstractHTMLRipper {
                 if (u.startsWith("//")) {
                     u = "https:" + u;
                 }
+                if (u.contains("hosting.photobucket.com") && u.contains("?")) {
+                    u = u.substring(0, u.indexOf('?')); // the page advertises a 200x200 thumbnail; without the size options it is the full picture
+                }
                 if (u.startsWith("http") && !found.contains(u)) {
                     found.add(u);
                 }

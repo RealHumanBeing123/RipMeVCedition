@@ -41,26 +41,25 @@ public class SankakuComplexRipper extends AbstractHTMLRipper {
 
     @Override
     public String getGID(URL url) throws MalformedURLException {
-        Pattern p = Pattern.compile("^https?://([a-zA-Z0-9]+\\.)?sankakucomplex\\.com/.*tags=([^&]+).*$");
+        Pattern p = Pattern.compile("^https?://([a-zA-Z0-9]+\\.)?(?:sankakucomplex\\.com|sankaku\\.app)/.*tags=([^&]+).*$");
         Matcher m = p.matcher(url.toExternalForm());
         if (m.matches()) {
             try {
-                return URLDecoder.decode(m.group(1) + "_" + m.group(2), "UTF-8");
+                return URLDecoder.decode((m.group(1) == null ? "sankaku." : m.group(1)) + "_" + m.group(2), "UTF-8");
             } catch (UnsupportedEncodingException e) {
                 throw new MalformedURLException("Cannot decode tag name '" + m.group(1) + "'");
             }
         }
-        throw new MalformedURLException("Expected sankakucomplex.com URL format: " +
-                        "idol.sankakucomplex.com?...&tags=something... - got " +
+        throw new MalformedURLException("Expected a Sankaku tag-search link like https://chan.sankakucomplex.com/?tags=something or https://sankaku.app/?tags=something - got " +
                         url + "instead");
     }
 
     public String getSubDomain(URL url){
-        Pattern p = Pattern.compile("^https?://([a-zA-Z0-9]+\\.)?sankakucomplex\\.com/.*tags=([^&]+).*$");
+        Pattern p = Pattern.compile("^https?://([a-zA-Z0-9]+\\.)?(?:sankakucomplex\\.com|sankaku\\.app)/.*tags=([^&]+).*$");
         Matcher m = p.matcher(url.toExternalForm());
         if (m.matches()) {
             try {
-                return URLDecoder.decode(m.group(1), "UTF-8");
+                return m.group(1) == null ? null : URLDecoder.decode(m.group(1), "UTF-8");
             } catch (UnsupportedEncodingException e) {
                 return null;
             }
@@ -72,6 +71,11 @@ public class SankakuComplexRipper extends AbstractHTMLRipper {
     // Sankaku's pages are rendered by JavaScript and need a login; its public JSON API does not.
     private static final String API = "https://sankakuapi.com/v2/posts/keyset";
     private static final String JSON_ATTR = "data-json";
+
+    private String siteOrigin() {
+        return url.getHost() != null && url.getHost().toLowerCase().endsWith("sankaku.app")
+                ? "https://sankaku.app" : "https://chan.sankakucomplex.com";
+    }
 
     private String rawTags() throws IOException {
         String query = url.getQuery();
@@ -90,8 +94,8 @@ public class SankakuComplexRipper extends AbstractHTMLRipper {
                 + (next != null ? "&next=" + java.net.URLEncoder.encode(next, java.nio.charset.StandardCharsets.UTF_8) : "");
         JSONObject json = Http.url(api)
                 .header("Accept", "application/vnd.sankaku.api+json;v=2")
-                .header("Origin", "https://chan.sankakucomplex.com")
-                .referrer("https://chan.sankakucomplex.com/")
+                .header("Origin", siteOrigin())
+                .referrer(siteOrigin() + "/")
                 .getJSON();
         Document doc = new Document(api);
         doc.body().attr(JSON_ATTR, json.toString());
@@ -135,7 +139,7 @@ public class SankakuComplexRipper extends AbstractHTMLRipper {
         sleep(1000);
         java.util.Map<String, String> options = new HashMap<>();
         options.put("prefix", getPrefix(index));
-        options.put("referrer", "https://chan.sankakucomplex.com/");
+        options.put("referrer", siteOrigin() + "/");
         addURLToDownload(url, options);
     }
 

@@ -136,7 +136,7 @@ public class VkRipper extends AbstractJSONRipper {
 
     @Override
     public boolean canRip(URL url) {
-        if (!url.getHost().endsWith(DOMAIN)) {
+        if (!(url.getHost().endsWith(DOMAIN) || url.getHost().endsWith("vk.ru"))) {
             return false;
         }
         // Ignore /video pages (but not /videos pages)
@@ -203,10 +203,10 @@ public class VkRipper extends AbstractJSONRipper {
 
     @Override
     public String getGID(URL url) throws MalformedURLException {
-        Pattern p = Pattern.compile("^https?:\\/\\/(?:www\\.)?vk\\.com\\/((?:photos|album|videos)-?(?:[a-zA-Z0-9_]+).*$)");
+        Pattern p = Pattern.compile("^https?:\\/\\/(?:www\\.|m\\.)?vk\\.(?:com|ru)\\/((?:photos|album|videos)-?(?:[a-zA-Z0-9_]+).*$)");
         Matcher m = p.matcher(url.toExternalForm());
         if (!m.matches()) {
-            throw new MalformedURLException("Expected format: http://vk.com/album#### or vk.com/photos####");
+            throw new MalformedURLException("VK links that can be ripped look like vk.com/album-123_456, vk.com/albums123 / vk.com/photos123 or vk.com/videos123 (vk.ru works too). Profile pages and wall posts are not supported - open the album on VK and copy its link.");
         }
         return m.group(1);
     }
