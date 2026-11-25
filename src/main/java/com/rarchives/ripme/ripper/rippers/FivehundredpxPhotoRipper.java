@@ -29,7 +29,7 @@ public class FivehundredpxPhotoRipper extends AbstractJSONRipper {
     private static final Logger logger = LogManager.getLogger(FivehundredpxPhotoRipper.class);
 
     // 500px has used more than one address for this; the first one that answers with data is used.
-    private static final String[] APIS = { "https://api-neo.500px.com/graphql", "https://api.500px.com/graphql" };
+    private static final String[] APIS = { "https://api-neo.500px.com/graphql" };
 
     // Cookies handed out by the photo page (including 500px's x-csrf-token), sent along with each data request.
     private java.util.Map<String, String> siteCookies = null;
@@ -111,6 +111,7 @@ public class FivehundredpxPhotoRipper extends AbstractJSONRipper {
                     http.header("x-csrf-token", csrf);
                 }
                 http.connection().requestBody(body.toString());
+                http.connection().ignoreHttpErrors(true); // read the explanation 500px sends with an error
                 http.connection().followRedirects(false); // a redirect would quietly turn the POST into a page request
                 String label = api + " [" + (agents[i] == null ? "default" : agents[i].split("[ /]")[0])
                         + (browserHeaders[i] ? "" : ", no origin") + "]";
@@ -139,6 +140,7 @@ public class FivehundredpxPhotoRipper extends AbstractJSONRipper {
             Http http = Http.url(APIS[0] + enc).ignoreContentType().retries(1)
                     .referrer("https://500px.com/").header("Origin", "https://500px.com")
                     .header("Accept", "application/json").cookies(siteCookies);
+            http.connection().ignoreHttpErrors(true);
             http.connection().followRedirects(false);
             org.jsoup.Connection.Response r = http.response();
             String text = r.body();
@@ -163,6 +165,7 @@ public class FivehundredpxPhotoRipper extends AbstractJSONRipper {
         }
         String photoId = m.group(1);
         JSONObject reply = ask("ID", photoId);
+        String firstReply = reply.toString();
         JSONObject firstData = reply.optJSONObject("data");
         if (reply.has("errors") && (firstData == null || firstData.optJSONObject("getPhotoById") == null)) {
             // 500px may name this id type differently; try once more.
@@ -171,7 +174,10 @@ public class FivehundredpxPhotoRipper extends AbstractJSONRipper {
         JSONObject data = reply.optJSONObject("data");
         JSONObject photo = data == null ? null : data.optJSONObject("getPhotoById");
         if (photo == null) {
-            throw new IOException("500px did not return this photo: " + reply.toString().substring(0, Math.min(300, reply.toString().length())));
+            String second = reply.toString();
+            throw new IOException("500px did not return this photo. Asking with ID type: "
+                    + firstReply.substring(0, Math.min(600, firstReply.length()))
+                    + " | asking with String type: " + second.substring(0, Math.min(600, second.length())));
         }
         return photo;
     }
