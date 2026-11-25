@@ -86,9 +86,28 @@ public class SankakuComplexRipper extends AbstractHTMLRipper {
     private static final String API = "https://sankakuapi.com/v2/posts/keyset";
     private static final String JSON_ATTR = "data-json";
 
+    /** The site the link is on (https://www.sankakucomplex.com, https://sankaku.app, ...): downloads must claim to come from it. */
     private String siteOrigin() {
-        return url.getHost() != null && url.getHost().toLowerCase().endsWith("sankaku.app")
-                ? "https://sankaku.app" : "https://chan.sankakucomplex.com";
+        String host = url.getHost() == null ? "" : url.getHost().toLowerCase();
+        if (host.endsWith("sankaku.app")) {
+            return "https://sankaku.app";
+        }
+        if (host.endsWith("sankakucomplex.com") && !host.equals("sankakucomplex.com")) {
+            return "https://" + host; // www., chan., beta., ...
+        }
+        return host.equals("sankakucomplex.com") ? "https://www.sankakucomplex.com" : "https://chan.sankakucomplex.com";
+    }
+
+    @Override
+    public boolean canRip(URL url) {
+        String host = url.getHost() == null ? "" : url.getHost().toLowerCase();
+        if (!(host.endsWith("sankakucomplex.com") || host.endsWith("sankaku.app"))) {
+            return false;
+        }
+        if (host.startsWith("forum.") || host.startsWith("news.")) {
+            return false; // the forum has its own ripper; news.* are magazine articles
+        }
+        return singlePostId(url) != null || url.toExternalForm().contains("tags=");
     }
 
     private String rawTags() throws IOException {
@@ -149,6 +168,9 @@ public class SankakuComplexRipper extends AbstractHTMLRipper {
                 String body = r.body();
                 JSONObject post = firstPost(body);
                 if (post != null) {
+                    logger.info("Sankaku post " + code + ": size " + post.optInt("width") + "x" + post.optInt("height")
+                            + ", file_size " + post.opt("file_size") + ", file_type " + post.opt("file_type")
+                            + ", file_url " + post.opt("file_url") + ", sample_url " + post.opt("sample_url"));
                     Document doc = new Document(api);
                     doc.body().attr(JSON_ATTR, new JSONObject().put("data", new JSONArray().put(post)).toString());
                     return doc;
