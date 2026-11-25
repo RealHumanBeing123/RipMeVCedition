@@ -26,6 +26,9 @@ import com.rarchives.ripme.utils.Http;
  */
 public class FivehundredpxPhotoRipper extends AbstractJSONRipper {
 
+    // 500px wants a device id on every data request; the website makes up a random one per browser.
+    private static final String DEVICE_ID = java.util.UUID.randomUUID().toString();
+
     private static final Logger logger = LogManager.getLogger(FivehundredpxPhotoRipper.class);
 
     // 500px has used more than one address for this; the first one that answers with data is used.
@@ -99,6 +102,7 @@ public class FivehundredpxPhotoRipper extends AbstractJSONRipper {
                 Http http = Http.url(api).method(Method.POST).ignoreContentType().retries(1)
                         .header("Accept", "*/*")
                         .header("Content-Type", "application/json")
+                        .header("x-500px-device-id", DEVICE_ID)
                         .cookies(siteCookies);
                 if (agents[i] != null) {
                     http.userAgent(agents[i]);
@@ -139,7 +143,7 @@ public class FivehundredpxPhotoRipper extends AbstractJSONRipper {
                     + "&variables=" + java.net.URLEncoder.encode(body.getJSONObject("variables").toString(), "UTF-8");
             Http http = Http.url(APIS[0] + enc).ignoreContentType().retries(1)
                     .referrer("https://500px.com/").header("Origin", "https://500px.com")
-                    .header("Accept", "application/json").cookies(siteCookies);
+                    .header("Accept", "application/json").header("x-500px-device-id", DEVICE_ID).cookies(siteCookies);
             http.connection().ignoreHttpErrors(true);
             http.connection().followRedirects(false);
             org.jsoup.Connection.Response r = http.response();
@@ -169,7 +173,7 @@ public class FivehundredpxPhotoRipper extends AbstractJSONRipper {
         JSONObject firstData = reply.optJSONObject("data");
         if (reply.has("errors") && (firstData == null || firstData.optJSONObject("getPhotoById") == null)) {
             // 500px may name this id type differently; try once more.
-            reply = ask("String", photoId);
+            reply = ask("ID", photoId);
         }
         JSONObject data = reply.optJSONObject("data");
         JSONObject photo = data == null ? null : data.optJSONObject("getPhotoById");
