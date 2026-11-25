@@ -130,9 +130,20 @@ public class NhentaiRipper extends AbstractHTMLRipper {
                 logger.warn("Could not find an image address in: {}", el.outerHtml());
                 continue;
             }
-            imageURLs.add(thumb.replaceAll("://t", "://i").replaceAll("t\\.", "."));
+            imageURLs.add(fullSizeFromThumbnail(thumb));
         }
         return new ArrayList<>(imageURLs);
+    }
+
+    /**
+     * "https://t2.nhentai.net/galleries/123/5t.webp.webp" (a thumbnail that was converted to webp) -> the
+     * full page image "https://i2.nhentai.net/galleries/123/5.webp"; "5t.jpg" -> "5.jpg".
+     */
+    public static String fullSizeFromThumbnail(String thumb) {
+        String full = thumb.replaceFirst("://t(\\d*)\\.", "://i$1.");
+        full = full.replaceAll("(/\\d+)t\\.", "$1.");
+        // the thumbnail's own ".webp" suffix is not part of the full image's name
+        return full.replaceAll("\\.(jpg|jpeg|png|gif|webp)\\.webp(\\?.*)?$", ".$1$2");
     }
 
     /**
