@@ -34,11 +34,11 @@ The list of supported rippers includes:
 - tumblr
 - instagram (needs an API key)
 - flickr
-- photobucket
-- 500px
+- photobucket (only shared links)
+- 500px (only single images currently)
 - danbooru
 - mastadon
-- sankaku (both the original forum website and the secondary AI image gen site)
+- sankaku (both the original forum website and their secondary AI image gen site)
 - reddit (uses browser cookies)
 - deviantart (can only download single images and the first 10 in a gallery)
 - [etc](https://github.com/ripmeapp/ripme/wiki/Supported-Sites)
