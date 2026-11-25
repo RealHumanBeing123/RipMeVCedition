@@ -11,6 +11,8 @@ import java.util.regex.Pattern;
 
 import org.json.JSONException;
 import org.json.JSONObject;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.jsoup.Connection.Method;
 
 import com.rarchives.ripme.ripper.AbstractJSONRipper;
@@ -24,9 +26,13 @@ import com.rarchives.ripme.utils.Http;
  */
 public class FivehundredpxPhotoRipper extends AbstractJSONRipper {
 
+    private static final Logger logger = LogManager.getLogger(FivehundredpxPhotoRipper.class);
+
     // 500px has used more than one address for this; the first one that answers with data is used.
-    private static final String[] APIS = { "https://api.500px.com/graphql", "https://500px.com/graphql",
-            "https://api.500px.com/graphql/" };
+    private static final String[] APIS = { "https://api.500px.com/graphql", "https://api.500px.com/graphql/" };
+
+    // Cookies handed out by the photo page (including 500px's x-csrf-token), sent along with each data request.
+    private java.util.Map<String, String> siteCookies = null;
 
     private static final Pattern PHOTO = Pattern.compile(
             "^https?://(?:www\\.)?500px\\.com/photo/([A-Za-z0-9]+)(?:/[^?#]*)?(?:[?#].*)?$");
@@ -73,28 +79,58 @@ public class FivehundredpxPhotoRipper extends AbstractJSONRipper {
                 .put("query", query)
                 .put("variables", new JSONObject().put("id", photoId));
         String lastStart = "";
-        for (String api : APIS) {
-            Http http = Http.url(api).method(Method.POST).ignoreContentType()
-                    .referrer("https://500px.com/")
-                    .header("Origin", "https://500px.com")
-                    .header("Accept", "application/json")
-                    .header("Content-Type", "application/json");
-            http.connection().requestBody(body.toString());
-            String text;
+        if (siteCookies == null) {
+            // Visit the photo page first, like a browser does: 500px gives out an x-csrf-token cookie there
+            // and its data address wants that token back.
+            siteCookies = new java.util.HashMap<>();
             try {
-                text = http.response().body();
+                siteCookies.putAll(Http.url("https://500px.com/photo/" + photoId).ignoreContentType().response().cookies());
             } catch (IOException e) {
-                lastStart = api + " -> " + e.getMessage();
-                continue;
-            }
-            try {
-                return new JSONObject(text);
-            } catch (JSONException e) {
-                String start = text.length() > 100 ? text.substring(0, 100) : text;
-                lastStart = api + " -> " + start.replaceAll("\\s+", " ");
+                // carry on without cookies; the error below will say what 500px answered
             }
         }
-        throw new IOException("500px did not answer with data. Last reply: " + lastStart);
+        // 500px's data address answers differently depending on who seems to be asking, so a few
+        // different "identities" are tried, quickest first. The first reply that is data wins.
+        String[] agents = { null, "curl/8.4.0", "RipMeVCedition/1.0 (+https://github.com/RealHumanBeing123/RipMeVCedition)" };
+        boolean[] browserHeaders = { true, true, false };
+        StringBuilder tried = new StringBuilder();
+        for (String api : APIS) {
+            for (int i = 0; i < agents.length; i++) {
+                Http http = Http.url(api).method(Method.POST).ignoreContentType().retries(1)
+                        .header("Accept", "*/*")
+                        .header("Content-Type", "application/json")
+                        .cookies(siteCookies);
+                if (agents[i] != null) {
+                    http.userAgent(agents[i]);
+                }
+                if (browserHeaders[i]) {
+                    http.referrer("https://500px.com/").header("Origin", "https://500px.com");
+                }
+                String csrf = siteCookies.get("x-csrf-token");
+                if (csrf != null) {
+                    http.header("x-csrf-token", csrf);
+                }
+                http.connection().requestBody(body.toString());
+                String label = api + " [" + (agents[i] == null ? "default" : agents[i].split("[ /]")[0])
+                        + (browserHeaders[i] ? "" : ", no origin") + "]";
+                try {
+                    org.jsoup.Connection.Response r = http.response();
+                    String text = r.body();
+                    try {
+                        return new JSONObject(text);
+                    } catch (JSONException e) {
+                        String start = text.length() > 80 ? text.substring(0, 80) : text;
+                        lastStart = label + " -> HTTP " + r.statusCode() + " " + r.contentType() + " "
+                                + start.replaceAll("\\s+", " ");
+                    }
+                } catch (IOException e) {
+                    lastStart = label + " -> " + e.getMessage();
+                }
+                logger.info("500px data request failed: " + lastStart);
+                tried.append("\n  ").append(lastStart);
+            }
+        }
+        throw new IOException("500px did not answer with data. Every attempt:" + tried);
     }
 
     @Override
