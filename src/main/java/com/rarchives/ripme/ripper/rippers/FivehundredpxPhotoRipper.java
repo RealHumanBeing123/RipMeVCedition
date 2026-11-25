@@ -29,7 +29,7 @@ public class FivehundredpxPhotoRipper extends AbstractJSONRipper {
     private static final Logger logger = LogManager.getLogger(FivehundredpxPhotoRipper.class);
 
     // 500px has used more than one address for this; the first one that answers with data is used.
-    private static final String[] APIS = { "https://api.500px.com/graphql", "https://api.500px.com/graphql/" };
+    private static final String[] APIS = { "https://api-neo.500px.com/graphql", "https://api.500px.com/graphql" };
 
     // Cookies handed out by the photo page (including 500px's x-csrf-token), sent along with each data request.
     private java.util.Map<String, String> siteCookies = null;
