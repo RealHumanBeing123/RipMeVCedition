@@ -39,8 +39,22 @@ public class SankakuComplexRipper extends AbstractHTMLRipper {
         return "sankakucomplex.com";
     }
 
+    // A single post: sankaku.app/posts/<code>, www.sankakucomplex.com/posts/<code>, .../en/posts/<code>, .../post/show/<code>
+    private static final Pattern SINGLE_POST = Pattern.compile(
+            "^https?://[^/]+/(?:[a-z]{2}(?:-[A-Za-z]+)?/)?(?:posts?(?:/show)?)/([A-Za-z0-9]+)/?(?:[?#].*)?$");
+
+    /** The post code of a single-post link, or null for tag searches and other pages. */
+    static String singlePostId(URL url) {
+        Matcher m = SINGLE_POST.matcher(url.toExternalForm());
+        return m.matches() ? m.group(1) : null;
+    }
+
     @Override
     public String getGID(URL url) throws MalformedURLException {
+        String post = singlePostId(url);
+        if (post != null) {
+            return "post_" + post;
+        }
         Pattern p = Pattern.compile("^https?://([a-zA-Z0-9]+\\.)?(?:sankakucomplex\\.com|sankaku\\.app)/.*tags=([^&]+).*$");
         Matcher m = p.matcher(url.toExternalForm());
         if (m.matches()) {
@@ -109,7 +123,65 @@ public class SankakuComplexRipper extends AbstractHTMLRipper {
             throw new IOException("idol.sankakucomplex.com has moved to idolcomplex.com, which ripme cannot read. "
                     + "Only chan.sankakucomplex.com tag searches are supported.");
         }
+        String post = singlePostId(url);
+        if (post != null) {
+            return singlePostPage(post);
+        }
         return apiPage(null);
+    }
+
+    /** Asks Sankaku's data address for one post, trying the forms it is known to answer to. */
+    private Document singlePostPage(String code) throws IOException {
+        String[] candidates = {
+                "https://sankakuapi.com/v2/posts/keyset?lang=en&limit=1&tags=id_range:" + code,
+                "https://sankakuapi.com/v2/posts?lang=en&page=1&limit=1&tags=id_range:" + code,
+                "https://sankakuapi.com/posts/" + code + "?lang=en",
+                "https://sankakuapi.com/v2/posts/" + code + "?lang=en"
+        };
+        StringBuilder tried = new StringBuilder();
+        for (String api : candidates) {
+            try {
+                Http http = Http.url(api).ignoreContentType().retries(1)
+                        .header("Accept", "application/vnd.sankaku.api+json;v=2")
+                        .header("Origin", siteOrigin()).referrer(siteOrigin() + "/");
+                http.connection().ignoreHttpErrors(true);
+                org.jsoup.Connection.Response r = http.response();
+                String body = r.body();
+                JSONObject post = firstPost(body);
+                if (post != null) {
+                    Document doc = new Document(api);
+                    doc.body().attr(JSON_ATTR, new JSONObject().put("data", new JSONArray().put(post)).toString());
+                    return doc;
+                }
+                tried.append("\n  ").append(api).append(" -> HTTP ").append(r.statusCode()).append(' ')
+                        .append(body.length() > 150 ? body.substring(0, 150) : body);
+            } catch (IOException | org.json.JSONException e) {
+                tried.append("\n  ").append(api).append(" -> ").append(e.getMessage());
+            }
+        }
+        throw new IOException("Sankaku did not give post " + code + ". Tried:" + tried);
+    }
+
+    /** A post object from any of the reply shapes (a post, {"data":[post]} or [post]); null if there is none with a file. */
+    static JSONObject firstPost(String body) {
+        Object parsed;
+        try {
+            parsed = body.trim().startsWith("[") ? new JSONArray(body) : new JSONObject(body);
+        } catch (org.json.JSONException e) {
+            return null;
+        }
+        JSONObject post = null;
+        if (parsed instanceof JSONArray) {
+            post = ((JSONArray) parsed).optJSONObject(0);
+        } else {
+            JSONObject o = (JSONObject) parsed;
+            if (o.has("file_url") || o.has("id") && o.has("md5")) {
+                post = o;
+            } else if (o.optJSONArray("data") != null) {
+                post = o.getJSONArray("data").optJSONObject(0);
+            }
+        }
+        return post != null && post.has("file_url") ? post : null;
     }
 
     @Override
