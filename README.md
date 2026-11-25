@@ -35,6 +35,10 @@ The list of supported rippers includes:
 - instagram (needs an API key)
 - flickr
 - photobucket
+- 500px
+- danbooru
+- mastadon
+- sankaku (both the original forum website and the secondary AI image gen site)
 - reddit (uses browser cookies)
 - deviantart (can only download single images and the first 10 in a gallery)
 - [etc](https://github.com/ripmeapp/ripme/wiki/Supported-Sites)
@@ -53,7 +57,10 @@ If your browser cannot be read, use Firefox for the login, or copy the `Cookie` 
 ## API keys needed for some websites
 
 Some sites like tumblr, twitter (X), instagram, and a few others require a new API key. I included my own that I requested, but it could get rate limited or revoked if too many people use it. So, I suggest that you request your own API key.
-After getting your own API key go to ```C:\Users\YourName\AppData\Local\ripme``` and change the ```tumblr.auth = APIkeyHere``` to include everything after the ```= ``` then hit save. You will be able to access the content of that website now.
+
+After getting your own API key go to ```C:\Users\YourName\AppData\Local\ripme``` and change the ```tumblr.auth = APIkeyHere``` to include everything after the ```= ``` then hit save. You will be able to access the content of that website now. 
+
+If you don't know how to get to this then hit the windows key and type ```%appdata%``` and click on the folder before that so you can reach the local folder.
 
 ## Sites Answering "Status Code 403"
 
@@ -86,6 +93,7 @@ Some sites do not work at all, this is either because of the aforementioned API 
 2. use CD for the place that you put it
    
 3. Two choices, the first one skips tests and the second one will perform tests
+   
 4. 
    ``` gradlew.bat build -x test -PcustomVersion=1.0.0-dev```
    
