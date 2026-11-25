@@ -111,6 +111,7 @@ public class FivehundredpxPhotoRipper extends AbstractJSONRipper {
                     http.header("x-csrf-token", csrf);
                 }
                 http.connection().requestBody(body.toString());
+                http.connection().followRedirects(false); // a redirect would quietly turn the POST into a page request
                 String label = api + " [" + (agents[i] == null ? "default" : agents[i].split("[ /]")[0])
                         + (browserHeaders[i] ? "" : ", no origin") + "]";
                 try {
@@ -120,8 +121,9 @@ public class FivehundredpxPhotoRipper extends AbstractJSONRipper {
                         return new JSONObject(text);
                     } catch (JSONException e) {
                         String start = text.length() > 80 ? text.substring(0, 80) : text;
-                        lastStart = label + " -> HTTP " + r.statusCode() + " " + r.contentType() + " "
-                                + start.replaceAll("\\s+", " ");
+                        lastStart = label + " -> HTTP " + r.statusCode() + " " + r.contentType()
+                                + " location=" + r.header("Location") + " server=" + r.header("Server")
+                                + " finalUrl=" + r.url() + " " + start.replaceAll("\\s+", " ");
                     }
                 } catch (IOException e) {
                     lastStart = label + " -> " + e.getMessage();
@@ -129,6 +131,25 @@ public class FivehundredpxPhotoRipper extends AbstractJSONRipper {
                 logger.info("500px data request failed: " + lastStart);
                 tried.append("\n  ").append(lastStart);
             }
+        }
+        // Last resort: the same question as a plain GET (many GraphQL servers accept that too).
+        try {
+            String enc = "?operationName=PhotoQuery&query=" + java.net.URLEncoder.encode(query, "UTF-8")
+                    + "&variables=" + java.net.URLEncoder.encode(body.getJSONObject("variables").toString(), "UTF-8");
+            Http http = Http.url(APIS[0] + enc).ignoreContentType().retries(1)
+                    .referrer("https://500px.com/").header("Origin", "https://500px.com")
+                    .header("Accept", "application/json").cookies(siteCookies);
+            http.connection().followRedirects(false);
+            org.jsoup.Connection.Response r = http.response();
+            String text = r.body();
+            try {
+                return new JSONObject(text);
+            } catch (JSONException e) {
+                tried.append("\n  GET " + APIS[0] + " -> HTTP " + r.statusCode() + " " + r.contentType()
+                        + " location=" + r.header("Location") + " server=" + r.header("Server"));
+            }
+        } catch (IOException e) {
+            tried.append("\n  GET " + APIS[0] + " -> " + e.getMessage());
         }
         throw new IOException("500px did not answer with data. Every attempt:" + tried);
     }
