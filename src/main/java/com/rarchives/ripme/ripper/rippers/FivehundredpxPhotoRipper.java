@@ -9,14 +9,22 @@ import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import org.jsoup.nodes.Document;
-import org.jsoup.nodes.Element;
+import org.json.JSONException;
+import org.json.JSONObject;
+import org.jsoup.Connection.Method;
 
-import com.rarchives.ripme.ripper.AbstractHTMLRipper;
+import com.rarchives.ripme.ripper.AbstractJSONRipper;
 import com.rarchives.ripme.utils.Http;
 
-/** Rips a single 500px photo page, e.g. https://500px.com/photo/azrKSPoE4vH */
-public class FivehundredpxPhotoRipper extends AbstractHTMLRipper {
+/**
+ * Rips a single 500px photo page, e.g. https://500px.com/photo/azrKSPoE4vH
+ *
+ * 500px's pages are built by JavaScript, so the photo is asked for from 500px's GraphQL data
+ * address (the same one the website itself uses), using the id from the link.
+ */
+public class FivehundredpxPhotoRipper extends AbstractJSONRipper {
+
+    private static final String API = "https://api.500px.com/graphql";
 
     private static final Pattern PHOTO = Pattern.compile(
             "^https?://(?:www\\.)?500px\\.com/photo/([A-Za-z0-9]+)(?:/[^?#]*)?(?:[?#].*)?$");
@@ -37,7 +45,6 @@ public class FivehundredpxPhotoRipper extends AbstractHTMLRipper {
 
     @Override
     public boolean canRip(URL url) {
-        // The ripper factory picks the first ripper whose canRip says yes, so match the address shape, not just the site.
         // Claims every 500px address so that galleries and favorites get the clear explanation below
         // instead of a confusing error from the old, broken ripper.
         return url.getHost() != null && url.getHost().toLowerCase().endsWith("500px.com");
@@ -56,31 +63,61 @@ public class FivehundredpxPhotoRipper extends AbstractHTMLRipper {
         return "page" + path;
     }
 
-    @Override
-    protected Document getFirstPage() throws IOException, URISyntaxException {
-        Document page = Http.url(url).get();
-        if (getURLsFromPage(page).isEmpty()) {
-            throw new IOException("500px builds its pages with JavaScript, so the photo is not in the page RipMe receives. "
-                    + "This version cannot download 500px photos, galleries or favorites.");
+    private JSONObject ask(String idType, String photoId) throws IOException {
+        String query = "query PhotoQuery($id: " + idType + "!) { getPhotoById(id: $id) { id downloadable "
+                + "urls { size_600 size_1024 size_2048 size_4k } } }";
+        JSONObject body = new JSONObject()
+                .put("operationName", "PhotoQuery")
+                .put("query", query)
+                .put("variables", new JSONObject().put("id", photoId));
+        Http http = Http.url(API).method(Method.POST).ignoreContentType()
+                .referrer("https://500px.com/")
+                .header("Origin", "https://500px.com")
+                .header("Accept", "application/json")
+                .header("Content-Type", "application/json");
+        http.connection().requestBody(body.toString());
+        String text = http.response().body();
+        try {
+            return new JSONObject(text);
+        } catch (JSONException e) {
+            String start = text.length() > 120 ? text.substring(0, 120) : text;
+            throw new IOException("500px did not answer with data. Reply started with: " + start.replaceAll("\\s+", " "), e);
         }
-        return page;
     }
 
     @Override
-    protected List<String> getURLsFromPage(Document page) {
-        List<String> result = new ArrayList<>();
-        // The big picture on the page (s=2 is its larger size); fall back to the social-media preview.
-        for (Element img : page.select("img[data-src*=500px.cloud/photo/], img[src*=500px.cloud/photo/]")) {
-            String src = img.hasAttr("data-src") ? img.attr("data-src") : img.attr("src");
-            if (!src.isEmpty()) {
-                result.add(src);
-                break;
-            }
+    protected JSONObject getFirstPage() throws IOException, URISyntaxException {
+        Matcher m = PHOTO.matcher(url.toExternalForm());
+        if (!m.matches()) {
+            throw new IOException("500px galleries, favorites and profiles are not supported yet - only single photo links "
+                    + "like https://500px.com/photo/<id>.");
         }
-        if (result.isEmpty()) {
-            Element og = page.selectFirst("meta[property=og:image]");
-            if (og != null && !og.attr("content").isEmpty()) {
-                result.add(og.attr("content"));
+        String photoId = m.group(1);
+        JSONObject reply = ask("String", photoId);
+        JSONObject firstData = reply.optJSONObject("data");
+        if (reply.has("errors") && (firstData == null || firstData.optJSONObject("getPhotoById") == null)) {
+            // 500px may name this id type differently; try once more.
+            reply = ask("ID", photoId);
+        }
+        JSONObject data = reply.optJSONObject("data");
+        JSONObject photo = data == null ? null : data.optJSONObject("getPhotoById");
+        if (photo == null) {
+            throw new IOException("500px did not return this photo: " + reply.toString().substring(0, Math.min(300, reply.toString().length())));
+        }
+        return photo;
+    }
+
+    @Override
+    protected List<String> getURLsFromJSON(JSONObject photo) {
+        List<String> result = new ArrayList<>();
+        JSONObject urls = photo.optJSONObject("urls");
+        if (urls != null) {
+            for (String key : new String[] { "size_4k", "size_2048", "size_1024", "size_600" }) {
+                String u = urls.optString(key, "");
+                if (u.startsWith("http")) {
+                    result.add(u);
+                    break;
+                }
             }
         }
         return result;
