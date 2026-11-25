@@ -24,7 +24,9 @@ import com.rarchives.ripme.utils.Http;
  */
 public class FivehundredpxPhotoRipper extends AbstractJSONRipper {
 
-    private static final String API = "https://api.500px.com/graphql";
+    // 500px has used more than one address for this; the first one that answers with data is used.
+    private static final String[] APIS = { "https://api.500px.com/graphql", "https://500px.com/graphql",
+            "https://api.500px.com/graphql/" };
 
     private static final Pattern PHOTO = Pattern.compile(
             "^https?://(?:www\\.)?500px\\.com/photo/([A-Za-z0-9]+)(?:/[^?#]*)?(?:[?#].*)?$");
@@ -70,19 +72,29 @@ public class FivehundredpxPhotoRipper extends AbstractJSONRipper {
                 .put("operationName", "PhotoQuery")
                 .put("query", query)
                 .put("variables", new JSONObject().put("id", photoId));
-        Http http = Http.url(API).method(Method.POST).ignoreContentType()
-                .referrer("https://500px.com/")
-                .header("Origin", "https://500px.com")
-                .header("Accept", "application/json")
-                .header("Content-Type", "application/json");
-        http.connection().requestBody(body.toString());
-        String text = http.response().body();
-        try {
-            return new JSONObject(text);
-        } catch (JSONException e) {
-            String start = text.length() > 120 ? text.substring(0, 120) : text;
-            throw new IOException("500px did not answer with data. Reply started with: " + start.replaceAll("\\s+", " "), e);
+        String lastStart = "";
+        for (String api : APIS) {
+            Http http = Http.url(api).method(Method.POST).ignoreContentType()
+                    .referrer("https://500px.com/")
+                    .header("Origin", "https://500px.com")
+                    .header("Accept", "application/json")
+                    .header("Content-Type", "application/json");
+            http.connection().requestBody(body.toString());
+            String text;
+            try {
+                text = http.response().body();
+            } catch (IOException e) {
+                lastStart = api + " -> " + e.getMessage();
+                continue;
+            }
+            try {
+                return new JSONObject(text);
+            } catch (JSONException e) {
+                String start = text.length() > 100 ? text.substring(0, 100) : text;
+                lastStart = api + " -> " + start.replaceAll("\\s+", " ");
+            }
         }
+        throw new IOException("500px did not answer with data. Last reply: " + lastStart);
     }
 
     @Override
