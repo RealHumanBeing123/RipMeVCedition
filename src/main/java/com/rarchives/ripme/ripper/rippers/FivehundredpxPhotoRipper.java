@@ -93,11 +93,11 @@ public class FivehundredpxPhotoRipper extends AbstractJSONRipper {
                     + "like https://500px.com/photo/<id>.");
         }
         String photoId = m.group(1);
-        JSONObject reply = ask("String", photoId);
+        JSONObject reply = ask("ID", photoId);
         JSONObject firstData = reply.optJSONObject("data");
         if (reply.has("errors") && (firstData == null || firstData.optJSONObject("getPhotoById") == null)) {
             // 500px may name this id type differently; try once more.
-            reply = ask("ID", photoId);
+            reply = ask("String", photoId);
         }
         JSONObject data = reply.optJSONObject("data");
         JSONObject photo = data == null ? null : data.optJSONObject("getPhotoById");
