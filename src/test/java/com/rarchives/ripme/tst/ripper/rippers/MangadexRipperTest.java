@@ -32,4 +32,19 @@ public class MangadexRipperTest extends RippersTest {
         org.junit.jupiter.api.Assertions.assertEquals("44625", title.getGID(title.getURL()));
     }
 
+    @Test
+    public void testChapterSelection() throws IOException, URISyntaxException {
+        String link = "https://mangadex.org/title/de2bb316-0533-4f1a-b789-4776ef673dd4/some-name?chapters=1-3,5";
+        org.junit.jupiter.api.Assertions.assertEquals("1-3,5", MangadexRipper.chapterSelection(link));
+        org.junit.jupiter.api.Assertions.assertEquals("", MangadexRipper.chapterSelection("https://mangadex.org/title/de2bb316-0533-4f1a-b789-4776ef673dd4/x"));
+        org.junit.jupiter.api.Assertions.assertTrue(MangadexRipper.chapterSelected("1-3,5", "2"));
+        org.junit.jupiter.api.Assertions.assertTrue(MangadexRipper.chapterSelected("1-3,5", "5"));
+        org.junit.jupiter.api.Assertions.assertFalse(MangadexRipper.chapterSelected("1-3,5", "4"));
+        org.junit.jupiter.api.Assertions.assertTrue(MangadexRipper.chapterSelected("1", "1"));
+        org.junit.jupiter.api.Assertions.assertFalse(MangadexRipper.chapterSelected("1", "2"));
+        org.junit.jupiter.api.Assertions.assertTrue(MangadexRipper.chapterSelected("", "99"));
+        MangadexRipper r = new MangadexRipper(new URI(link).toURL());
+        org.junit.jupiter.api.Assertions.assertEquals("de2bb316-0533-4f1a-b789-4776ef673dd4_ch1-3_5", r.getGID(r.getURL()));
+    }
+
 }

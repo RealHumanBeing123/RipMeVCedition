@@ -52,11 +52,56 @@ public class MangadexRipper extends AbstractJSONRipper {
         return url.getHost().endsWith("mangadex.org");
     }
 
+    /**
+     * Which chapters to take from a title link: "?chapters=1", "?chapters=1-3,5" or "?chapter=2.5"
+     * (chapter numbers as shown on MangaDex). Empty means every chapter.
+     */
+    public static String chapterSelection(String link) {
+        Matcher m = Pattern.compile("[?&#]chapters?=([0-9.,\\-]+)").matcher(link);
+        return m.find() ? m.group(1) : "";
+    }
+
+    /** True if the chapter number (e.g. "3", "10.5") is inside the selection ("1-3,5"); an empty selection takes everything. */
+    public static boolean chapterSelected(String selection, String chapterNumber) {
+        if (selection == null || selection.isEmpty()) {
+            return true;
+        }
+        double n;
+        try {
+            n = Double.parseDouble(chapterNumber);
+        } catch (NumberFormatException e) {
+            return false; // chapters without a number cannot be picked by number
+        }
+        for (String part : selection.split(",")) {
+            part = part.trim();
+            if (part.isEmpty()) {
+                continue;
+            }
+            try {
+                int dash = part.indexOf('-', 1);
+                if (dash > 0) {
+                    double from = Double.parseDouble(part.substring(0, dash));
+                    double to = Double.parseDouble(part.substring(dash + 1));
+                    if (n >= Math.min(from, to) && n <= Math.max(from, to)) {
+                        return true;
+                    }
+                } else if (n == Double.parseDouble(part)) {
+                    return true;
+                }
+            } catch (NumberFormatException e) {
+                // ignore a part that is not a number
+            }
+        }
+        return false;
+    }
+
     @Override
     public String getGID(URL url) throws MalformedURLException {
         Matcher m = LINK.matcher(url.toExternalForm());
         if (m.matches()) {
-            return m.group(2);
+            String selection = chapterSelection(url.toExternalForm());
+            return selection.isEmpty() || !m.group(1).equals("title") && !m.group(1).equals("manga")
+                    ? m.group(2) : m.group(2) + "_ch" + selection.replace(',', '_');
         }
         throw new MalformedURLException("Expected mangadex.org/title/ID/name or mangadex.org/chapter/ID, got " + url);
     }
@@ -110,6 +155,7 @@ public class MangadexRipper extends AbstractJSONRipper {
         }
 
         String language = Utils.getConfigString("mangadex.language", "en");
+        String selection = chapterSelection(url.toExternalForm());
         // one entry per chapter number: several scanlation groups often upload the same chapter
         Map<String, String> byNumber = new LinkedHashMap<>();
         int offset = 0;
@@ -136,6 +182,9 @@ public class MangadexRipper extends AbstractJSONRipper {
                     continue;
                 }
                 String chapterId = chapterJson.getString("id");
+                if (!selection.isEmpty() && !chapterSelected(selection, attributes.optString("chapter", ""))) {
+                    continue;
+                }
                 String number = attributes.isNull("chapter") ? chapterId : attributes.optString("volume", "") + "/" + attributes.optString("chapter");
                 byNumber.putIfAbsent(number, chapterId);
             }
@@ -145,6 +194,9 @@ public class MangadexRipper extends AbstractJSONRipper {
             chapters.put(chapterId);
         }
         if (chapters.isEmpty()) {
+            if (!selection.isEmpty()) {
+                throw new IOException("None of the chapters '" + selection + "' exist in '" + language + "' for this MangaDex title.");
+            }
             throw new IOException("No '" + language + "' chapters found for this MangaDex title "
                     + "(set mangadex.language in the configuration file to read another language)");
         }

@@ -56,6 +56,14 @@ public class PhotobucketRipper extends AbstractHTMLRipper {
         }
     }
 
+    // Photobucket's current links: photobucket.com/library/media/<id> and photobucket.com/share/<id>
+    private static final Pattern NEW_STYLE = Pattern.compile(
+            "^https?://(?:www\\.)?photobucket\\.com/(?:library/media|share)/([0-9a-zA-Z-]+)/?(?:[?#].*)?$");
+
+    private boolean isNewStyle(URL u) {
+        return NEW_STYLE.matcher(u.toExternalForm()).matches();
+    }
+
     private final Pattern collDataPattern;
     private final Pattern pbURLPattern;
 
@@ -106,6 +114,11 @@ public class PhotobucketRipper extends AbstractHTMLRipper {
     public String getGID(URL url) throws MalformedURLException, URISyntaxException {
         Matcher m;
 
+        Matcher nm = NEW_STYLE.matcher(url.toExternalForm());
+        if (nm.matches()) {
+            return "media_" + nm.group(1);
+        }
+
         URL sanitized = sanitizeURL(url);
 
         // http://s844.photobucket.com/user/SpazzySpizzy/library/Lady%20Gaga?sort=3&page=1
@@ -132,6 +145,15 @@ public class PhotobucketRipper extends AbstractHTMLRipper {
 
     @Override
     public Document getFirstPage() throws IOException {
+        if (isNewStyle(this.url)) {
+            Document page = Http.url(this.url).get();
+            if (mediaFromNewStylePage(page).isEmpty()) {
+                throw new IOException("This Photobucket page does not show a public image or video to download "
+                        + "(it probably needs a login, or Photobucket changed its page). Only public photobucket.com/share/... "
+                        + "and photobucket.com/library/media/... links can be ripped, one item per link.");
+            }
+            return page;
+        }
         try {
             return loadFirstPage();
         } catch (org.json.JSONException e) {
@@ -170,6 +192,9 @@ public class PhotobucketRipper extends AbstractHTMLRipper {
 
     @Override
     public Document getNextPage(Document page) throws IOException {
+        if (isNewStyle(this.url)) {
+            throw new IOException("No more pages");
+        }
         this.currAlbum.pageIndex++;
         boolean endOfAlbum = currAlbum.pageIndex > currAlbum.numPages;
         boolean noMoreSubalbums = albums.isEmpty();
@@ -202,6 +227,9 @@ public class PhotobucketRipper extends AbstractHTMLRipper {
 
     @Override
     protected List<String> getURLsFromPage(Document page) {
+        if (isNewStyle(this.url)) {
+            return mediaFromNewStylePage(page);
+        }
         JSONObject collectionData = getCollectionData(page);
         if (collectionData == null) {
             logger.error("Unable to find JSON data at URL: " + page.location());
@@ -211,6 +239,28 @@ public class PhotobucketRipper extends AbstractHTMLRipper {
         } else {
             return getImageURLs(collectionData);
         }
+    }
+
+    /** The picture or video a current-style Photobucket page advertises to link previews. */
+    private List<String> mediaFromNewStylePage(Document page) {
+        List<String> found = new ArrayList<>();
+        String[] selectors = { "meta[property=og:video]", "meta[property=og:video:url]", "meta[property=og:image]",
+                "meta[name=twitter:image]", "link[rel=image_src]" };
+        for (String selector : selectors) {
+            for (Element e : page.select(selector)) {
+                String u = e.hasAttr("content") ? e.attr("content") : e.attr("href");
+                if (u.startsWith("//")) {
+                    u = "https:" + u;
+                }
+                if (u.startsWith("http") && !found.contains(u)) {
+                    found.add(u);
+                }
+            }
+            if (!found.isEmpty()) {
+                break; // the first kind of link that exists is the best one
+            }
+        }
+        return found;
     }
 
     private JSONObject getCollectionData(Document page){
@@ -243,6 +293,10 @@ public class PhotobucketRipper extends AbstractHTMLRipper {
 
     @Override
     protected void downloadURL(URL url, int index) {
+        if (isNewStyle(this.url)) {
+            addURLToDownload(url, getPrefix(index));
+            return;
+        }
         addURLToDownload(url, getPrefix(++this.index), currAlbum.location,
                 currAlbum.currPage.location(), currAlbum.cookies);
     }
