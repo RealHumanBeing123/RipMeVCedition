@@ -35,7 +35,7 @@ The list of supported rippers includes:
 - instagram (needs an API key)
 - flickr
 - photobucket (only shared links)
-- 500px (only single images currently)
+- 500px (single images & galleries)
 - danbooru
 - mastadon
 - sankaku (both the original forum website and their secondary AI image gen site)
