@@ -302,7 +302,7 @@ public class ImgurRipper extends AbstractHTMLRipper {
 
         String newUrl = "https://imgur.com/a/" + code + "/noscript";
         logger.info("    Retrieving " + newUrl);
-        doc = Jsoup.connect(newUrl)
+        Document doc = Jsoup.connect(newUrl)
                             .userAgent(USER_AGENT)
                             .get();
 
