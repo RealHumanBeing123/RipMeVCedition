@@ -27,8 +27,13 @@ public class CoomerPartyRipper extends AbstractJSONRipper {
 
     private static final Logger logger = LogManager.getLogger(CoomerPartyRipper.class);
 
-    private static final String IMG_URL_BASE = "https://c3.coomer.st/data";
-    private static final String VID_URL_BASE = "https://c1.coomer.st/data";
+    // the picture servers are n1..n4 (c1/c3 no longer exist); they all hold everything, so take turns
+    private int serverTurn = 0;
+
+    private String dataBase() {
+        serverTurn = serverTurn % 4 + 1;
+        return "https://n" + serverTurn + ".coomer.st/data";
+    }
     private static final Pattern IMG_PATTERN = Pattern.compile("^.*\\.(jpg|jpeg|png|gif|apng|webp|tif|tiff)$", Pattern.CASE_INSENSITIVE);
     private static final Pattern VID_PATTERN = Pattern.compile("^.*\\.(webm|mp4|m4v)$", Pattern.CASE_INSENSITIVE);
 
@@ -52,6 +57,9 @@ public class CoomerPartyRipper extends AbstractJSONRipper {
     // Username of the page to be ripped
     private final String user;
 
+    // set when the link is one post (.../user/<id>/post/<postId>): only that post is ripped
+    private String postId = null;
+
 
 
     public CoomerPartyRipper(URL url) throws IOException {
@@ -67,7 +75,10 @@ public class CoomerPartyRipper extends AbstractJSONRipper {
             logger.warn("service=" + service + ", user=" + user);
             throw new MalformedURLException("Invalid coomer.party URL: " + url);
         }
-        logger.debug("Parsed service=" + service + " and user=" + user + " from " + url);
+        if (pathElements.size() >= 5 && pathElements.get(3).equals("post")) {
+            postId = pathElements.get(4);
+        }
+        logger.debug("Parsed service=" + service + " and user=" + user + " post=" + postId + " from " + url);
     }
 
     @Override
@@ -88,7 +99,7 @@ public class CoomerPartyRipper extends AbstractJSONRipper {
 
     @Override
     public String getGID(URL url) {
-        return Utils.filesystemSafe(String.format("%s_%s", service, user));
+        return Utils.filesystemSafe(String.format("%s_%s", service, user) + (postId == null ? "" : "_post" + postId));
     }
 
     private JSONObject getJsonPostsForOffset(Integer offset) throws IOException {
@@ -109,11 +120,23 @@ public class CoomerPartyRipper extends AbstractJSONRipper {
 
     @Override
     protected JSONObject getFirstPage() throws IOException {
+        if (postId != null) {
+            String apiUrl = String.format("https://coomer.st/api/v1/%s/user/%s/post/%s", service, user, postId);
+            String body = Http.url(apiUrl).ignoreContentType().header("Accept", "text/css").response().body();
+            JSONObject reply = new JSONObject(body);
+            JSONObject post = reply.has("post") ? reply.getJSONObject("post") : reply;
+            JSONObject wrapperObject = new JSONObject();
+            wrapperObject.put(KEY_WRAPPER_JSON_ARRAY, new JSONArray().put(post));
+            return wrapperObject;
+        }
         return getJsonPostsForOffset(0);
     }
 
     @Override
     protected JSONObject getNextPage(JSONObject doc) throws IOException, URISyntaxException {
+        if (postId != null || doc.getJSONArray(KEY_WRAPPER_JSON_ARRAY).isEmpty()) {
+            return null; // one post, or the last page was empty: nothing more
+        }
         pageCount++;
         Integer offset = postCount * pageCount;
         return getJsonPostsForOffset(offset);
@@ -136,19 +159,22 @@ public class CoomerPartyRipper extends AbstractJSONRipper {
 
     @Override
     protected void downloadURL(URL url, int index) {
-        sleep(5000);
+        sleep(1000);
         addURLToDownload(url, getPrefix(index));
     }
 
     private void pullFileUrl(JSONObject post, ArrayList<String> results) {
         try {
-            JSONObject file = post.getJSONObject(KEY_FILE);
+            JSONObject file = post.optJSONObject(KEY_FILE);
+            if (file == null || file.optString(KEY_PATH, "").isEmpty()) {
+                return; // this post has no main file (only text or attachments)
+            }
             String path = file.getString(KEY_PATH);
             if (isImage(path)) {
-                String url = IMG_URL_BASE + path;
+                String url = dataBase() + path;
                 results.add(url);
             } else if (isVideo(path)) {
-                String url = VID_URL_BASE + path;
+                String url = dataBase() + path;
                 results.add(url);
             } else {
                 logger.error("Unknown extension for coomer.su path: " + path);
@@ -161,7 +187,10 @@ public class CoomerPartyRipper extends AbstractJSONRipper {
 
     private void pullAttachmentUrls(JSONObject post, ArrayList<String> results) {
         try {
-            JSONArray attachments = post.getJSONArray(KEY_ATTACHMENTS);
+            JSONArray attachments = post.optJSONArray(KEY_ATTACHMENTS);
+            if (attachments == null) {
+                return;
+            }
             for (int i = 0; i < attachments.length(); i++) {
                 JSONObject attachment = attachments.getJSONObject(i);
                 pullFileUrl(attachment, results);

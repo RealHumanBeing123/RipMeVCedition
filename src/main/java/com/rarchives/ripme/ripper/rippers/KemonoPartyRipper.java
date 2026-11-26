@@ -31,8 +31,13 @@ import java.util.stream.Collectors;
 public class KemonoPartyRipper extends AbstractJSONRipper {
     private static final Logger LOGGER = LogManager.getLogger(KemonoPartyRipper.class);
     private static final String API_HOST = "kemono.cr";
-    private static final String IMG_URL_BASE = "https://c3.kemono.cr/data";
-    private static final String VID_URL_BASE = "https://c1.kemono.cr/data";
+    // the picture servers are n1..n4 (c1/c3 no longer exist); they all hold everything, so take turns
+    private int serverTurn = 0;
+
+    private String dataBase() {
+        serverTurn = serverTurn % 4 + 1;
+        return "https://n" + serverTurn + "." + API_HOST + "/data";
+    }
     private static final Pattern IMG_PATTERN = Pattern.compile("^.*\\.(jpg|jpeg|png|gif|apng|webp|tif|tiff)$", Pattern.CASE_INSENSITIVE);
     private static final Pattern VID_PATTERN = Pattern.compile("^.*\\.(webm|mp4|m4v)$", Pattern.CASE_INSENSITIVE);
 
@@ -49,6 +54,8 @@ public class KemonoPartyRipper extends AbstractJSONRipper {
     // Username of the page to be ripped
     private final String user;
     private int internalFileLimit;
+    // set when the link is one post (.../user/<id>/post/<postId>): only that post is ripped
+    private String postId = null;
 
     public KemonoPartyRipper(URL url) throws IOException {
         super(url);
@@ -63,7 +70,10 @@ public class KemonoPartyRipper extends AbstractJSONRipper {
             LOGGER.warn("service=" + service + ", user=" + user);
             throw new MalformedURLException("Invalid kemono URL: " + url);
         }
-        LOGGER.debug("Parsed service=" + service + " and user=" + user + " from " + url);
+        if (pathElements.size() >= 5 && pathElements.get(3).equals("post")) {
+            postId = pathElements.get(4);
+        }
+        LOGGER.debug("Parsed service=" + service + " and user=" + user + " post=" + postId + " from " + url);
     }
 
     @Override
@@ -84,11 +94,14 @@ public class KemonoPartyRipper extends AbstractJSONRipper {
 
     @Override
     public String getGID(URL url) {
-        return Utils.filesystemSafe(String.format("%s_%s", service, user));
+        return Utils.filesystemSafe(String.format("%s_%s", service, user) + (postId == null ? "" : "_post" + postId));
     }
 
     @Override
     protected JSONObject getFirstPage() throws IOException {
+        if (postId != null) {
+            return onePost();
+        }
         String apiUrl = String.format("https://%s/api/v1/%s/user/%s/posts", API_HOST, service, user);
         String jsonArrayString = Http.url(apiUrl)
                 .ignoreContentType()
@@ -100,6 +113,17 @@ public class KemonoPartyRipper extends AbstractJSONRipper {
         // Ideally we'd just return the JSONArray from here, but we have to wrap it in a JSONObject
         JSONObject wrapperObject = new JSONObject();
         wrapperObject.put(KEY_WRAPPER_JSON_ARRAY, jsonArray);
+        return wrapperObject;
+    }
+
+    /** One post: the data address answers {"post": {...}} (or the post itself); wrap it like a page of posts. */
+    private JSONObject onePost() throws IOException {
+        String apiUrl = String.format("https://%s/api/v1/%s/user/%s/post/%s", API_HOST, service, user, postId);
+        String body = Http.url(apiUrl).ignoreContentType().header("Accept", "text/css").response().body();
+        JSONObject reply = new JSONObject(body);
+        JSONObject post = reply.has("post") ? reply.getJSONObject("post") : reply;
+        JSONObject wrapperObject = new JSONObject();
+        wrapperObject.put(KEY_WRAPPER_JSON_ARRAY, new JSONArray().put(post));
         return wrapperObject;
     }
 
@@ -118,6 +142,9 @@ public class KemonoPartyRipper extends AbstractJSONRipper {
 
     @Override
     protected JSONObject getNextPage(JSONObject doc) throws IOException, URISyntaxException {
+        if (postId != null) {
+            return null; // a single post has no further pages
+        }
         String apiUrl = String.format("https://%s/api/v1/%s/user/%s/posts?o=%s", API_HOST, service, user, internalFileLimit);
         String jsonArrayString = Http.url(apiUrl)
                 .ignoreContentType()
@@ -163,13 +190,16 @@ public class KemonoPartyRipper extends AbstractJSONRipper {
      */
     private void pullFileUrl(JSONObject post, ArrayList<String> results) {
         try {
-            JSONObject file = post.getJSONObject(KEY_FILE);
+            JSONObject file = post.optJSONObject(KEY_FILE);
+            if (file == null || file.optString(KEY_PATH, "").isEmpty()) {
+                return; // this post has no main file (only text or attachments)
+            }
             String path = file.getString(KEY_PATH);
             if (isImage(path)) {
-                String url = IMG_URL_BASE + path;
+                String url = dataBase() + path;
                 results.add(url);
             } else if (isVideo(path)) {
-                String url = VID_URL_BASE + path;
+                String url = dataBase() + path;
                 results.add(url);
             } else {
                 LOGGER.error("Unknown extension for " + API_HOST + " path: " + path);
@@ -187,7 +217,10 @@ public class KemonoPartyRipper extends AbstractJSONRipper {
      */
     private void pullAttachmentUrls(JSONObject post, ArrayList<String> results) {
         try {
-            JSONArray attachments = post.getJSONArray(KEY_ATTACHMENTS);
+            JSONArray attachments = post.optJSONArray(KEY_ATTACHMENTS);
+            if (attachments == null) {
+                return;
+            }
             for (int i = 0; i < attachments.length(); i++) {
                 JSONObject attachment = attachments.getJSONObject(i);
                 pullFileUrl(attachment, results);

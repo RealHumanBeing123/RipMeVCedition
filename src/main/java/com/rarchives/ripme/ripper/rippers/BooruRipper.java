@@ -29,7 +29,7 @@ public class BooruRipper extends AbstractHTMLRipper {
 
     @Override
     public boolean canRip(URL url) {
-        if (url.toExternalForm().contains("xbooru") || url.toExternalForm().contains("gelbooru")) {
+        if (url.toExternalForm().contains("xbooru")) { // gelbooru has its own ripper now (its data service needs an account key)
             return true;
         }
         return false;
