@@ -12,6 +12,9 @@ import java.util.regex.Pattern;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.json.JSONArray;
+import org.json.JSONObject;
+import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
@@ -66,19 +69,103 @@ public class NhentaiRipper extends AbstractHTMLRipper {
 
     @Override
     public String getAlbumTitle(URL url) throws MalformedURLException {
-        if (firstPage == null) {
+        try {
+            loadPage();
+        } catch (IOException e) {
+            logger.warn("Could not read the gallery title: {}", e.getMessage());
+        }
+        String title = firstPage == null ? "" : firstPage.select("#info h1, h1.title").text().trim();
+        if (title.isEmpty()) {
+            return "nhentai_" + getGID(url);
+        }
+        return "nhentai_" + title;
+    }
+
+    private List<String> apiImages = null; // used when the web page itself cannot be read
+
+    /** True when the page shows the gallery's thumbnails. */
+    private static boolean looksLikeGallery(Document doc) {
+        return doc != null && !doc.select("a.gallerythumb img").isEmpty();
+    }
+
+    /**
+     * Loads the gallery page. nhentai's protection answers differently depending on who seems to be asking, so a few
+     * different identities are tried (your own cookies first), and as a last resort the gallery's data address.
+     */
+    private void loadPage() throws IOException {
+        if (firstPage != null) {
+            return;
+        }
+        String[] agents = { null, "curl/8.4.0", "RipMeVCedition/1.0 (+https://github.com/RealHumanBeing123/RipMeVCedition)" };
+        StringBuilder tried = new StringBuilder();
+        for (String agent : agents) {
+            String label = agent == null ? "default" : agent.split("[ /]")[0];
             try {
-                firstPage = Http.url(url).get();
+                Http http = Http.url(url).retries(1);
+                if (agent != null) {
+                    http.userAgent(agent);
+                }
+                http.connection().ignoreHttpErrors(true);
+                org.jsoup.Connection.Response r = http.response();
+                Document doc = Jsoup.parse(r.body(), url.toExternalForm());
+                if (looksLikeGallery(doc)) {
+                    firstPage = doc;
+                    return;
+                }
+                tried.append("\n  page [").append(label).append("] -> HTTP ").append(r.statusCode()).append(" title '")
+                        .append(doc.title()).append("'");
             } catch (IOException e) {
-                e.printStackTrace();
+                tried.append("\n  page [").append(label).append("] -> ").append(e.getMessage());
             }
         }
-
-        String title = firstPage.select("#info > h1").text();
-        if (title == null) {
-            return getAlbumTitle(url);
+        // last resort: the data address behind the page
+        String id = getGID(url);
+        for (String agent : agents) {
+            String label = agent == null ? "default" : agent.split("[ /]")[0];
+            try {
+                Http http = Http.url("https://nhentai.net/api/gallery/" + id).ignoreContentType().retries(1);
+                if (agent != null) {
+                    http.userAgent(agent);
+                }
+                http.connection().ignoreHttpErrors(true);
+                org.jsoup.Connection.Response r = http.response();
+                String body = r.body();
+                try {
+                    List<String> found = imagesFromApi(new JSONObject(body));
+                    if (!found.isEmpty()) {
+                        apiImages = found;
+                        firstPage = Document.createShell(url.toExternalForm());
+                        return;
+                    }
+                    tried.append("\n  api [").append(label).append("] -> no pages in the answer");
+                } catch (org.json.JSONException e) {
+                    tried.append("\n  api [").append(label).append("] -> HTTP ").append(r.statusCode()).append(' ')
+                            .append(body.length() > 80 ? body.substring(0, 80) : body).append(' ');
+                }
+            } catch (IOException e) {
+                tried.append("\n  api [").append(label).append("] -> ").append(e.getMessage());
+            }
         }
-        return "nhentai" + title;
+        throw new IOException("nhentai did not show the gallery to the ripper (it may be asking for a browser check). "
+                + "Try Configuration -> Site cookies -> Import from browser for nhentai.net after opening the gallery "
+                + "in your browser. Every attempt:" + tried);
+    }
+
+    /** Builds the full-size picture addresses from the gallery's data: {"media_id":"..","images":{"pages":[{"t":"j"}]}}. */
+    public static List<String> imagesFromApi(JSONObject gallery) {
+        List<String> urls = new ArrayList<>();
+        String media = gallery.optString("media_id", "");
+        JSONObject images = gallery.optJSONObject("images");
+        JSONArray pages = images == null ? null : images.optJSONArray("pages");
+        if (media.isEmpty() || pages == null) {
+            return urls;
+        }
+        for (int i = 0; i < pages.length(); i++) {
+            String t = pages.getJSONObject(i).optString("t", "j");
+            String ext = t.equals("p") ? "png" : t.equals("g") ? "gif" : t.equals("w") ? "webp" : "jpg";
+            urls.add("https://i" + (i % 4 + 1) + ".nhentai.net/galleries/" + media + "/" + (i + 1) + "." + ext);
+        }
+        return urls;
     }
 
     public List<String> getTags(Document doc) {
@@ -106,9 +193,7 @@ public class NhentaiRipper extends AbstractHTMLRipper {
 
     @Override
     public Document getFirstPage() throws IOException {
-        if (firstPage == null) {
-            firstPage = Http.url(url).get();
-        }
+        loadPage();
 
         String blacklistedTag = RipUtils.checkTags(Utils.getConfigStringArray("nhentai.blacklist.tags"), getTags(firstPage));
         if (blacklistedTag != null) {
@@ -121,6 +206,9 @@ public class NhentaiRipper extends AbstractHTMLRipper {
 
     @Override
     public List<String> getURLsFromPage(Document page) {
+        if (apiImages != null) {
+            return apiImages;
+        }
         // Set: lazy-loaded thumbnails are sometimes repeated inside <noscript> blocks
         Set<String> imageURLs = new LinkedHashSet<>();
         Elements thumbs = page.select("a.gallerythumb img");
