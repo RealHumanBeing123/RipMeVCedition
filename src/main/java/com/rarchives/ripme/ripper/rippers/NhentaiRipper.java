@@ -90,13 +90,22 @@ public class NhentaiRipper extends AbstractHTMLRipper {
 
     /**
      * Loads the gallery page. nhentai's protection answers differently depending on who seems to be asking, so a few
-     * different identities are tried (your own cookies first), and as a last resort the gallery's data address.
+     * different identities are tried (your own cookies first), and as a last resort the gallery's data addresses.
+     * If you copied cookies from your browser, nhentai only accepts them together with that browser's "user agent":
+     * put it in the setting nhentai.useragent (rip.properties) and it is tried first.
      */
     private void loadPage() throws IOException {
         if (firstPage != null) {
             return;
         }
-        String[] agents = { null, "curl/8.4.0", "RipMeVCedition/1.0 (+https://github.com/RealHumanBeing123/RipMeVCedition)" };
+        List<String> agents = new ArrayList<>();
+        String configured = Utils.getConfigString("nhentai.useragent", "").trim();
+        if (!configured.isEmpty()) {
+            agents.add(configured);
+        }
+        agents.add(null); // ripme's normal identity
+        agents.add("curl/8.4.0");
+        agents.add("RipMeVCedition/1.0 (+https://github.com/RealHumanBeing123/RipMeVCedition)");
         StringBuilder tried = new StringBuilder();
         for (String agent : agents) {
             String label = agent == null ? "default" : agent.split("[ /]")[0];
@@ -107,48 +116,82 @@ public class NhentaiRipper extends AbstractHTMLRipper {
                 }
                 http.connection().ignoreHttpErrors(true);
                 org.jsoup.Connection.Response r = http.response();
-                Document doc = Jsoup.parse(r.body(), url.toExternalForm());
+                String body = r.body();
+                Document doc = Jsoup.parse(body, url.toExternalForm());
                 if (looksLikeGallery(doc)) {
                     firstPage = doc;
                     return;
                 }
+                List<String> inText = imagesInText(body);
+                if (!inText.isEmpty()) {
+                    apiImages = inText;
+                    firstPage = doc;
+                    return;
+                }
                 tried.append("\n  page [").append(label).append("] -> HTTP ").append(r.statusCode()).append(" title '")
-                        .append(doc.title()).append("'");
+                        .append(doc.title()).append("' starts: ").append(snippet(body));
             } catch (IOException e) {
                 tried.append("\n  page [").append(label).append("] -> ").append(e.getMessage());
             }
         }
-        // last resort: the data address behind the page
+        // last resort: the data addresses behind the page (the old one is switched off, the new one is a guess)
         String id = getGID(url);
-        for (String agent : agents) {
-            String label = agent == null ? "default" : agent.split("[ /]")[0];
-            try {
-                Http http = Http.url("https://nhentai.net/api/gallery/" + id).ignoreContentType().retries(1);
-                if (agent != null) {
-                    http.userAgent(agent);
-                }
-                http.connection().ignoreHttpErrors(true);
-                org.jsoup.Connection.Response r = http.response();
-                String body = r.body();
+        String[] endpoints = { "https://nhentai.net/api/v2/galleries/" + id, "https://nhentai.net/api/v2/gallery/" + id,
+                "https://nhentai.net/api/gallery/" + id };
+        for (String endpoint : endpoints) {
+            for (String agent : agents) {
+                String label = (agent == null ? "default" : agent.split("[ /]")[0]);
                 try {
-                    List<String> found = imagesFromApi(new JSONObject(body));
+                    Http http = Http.url(endpoint).ignoreContentType().retries(1);
+                    if (agent != null) {
+                        http.userAgent(agent);
+                    }
+                    http.connection().ignoreHttpErrors(true);
+                    org.jsoup.Connection.Response r = http.response();
+                    String body = r.body();
+                    List<String> found = new ArrayList<>();
+                    try {
+                        found = imagesFromApi(new JSONObject(body));
+                    } catch (org.json.JSONException e) {
+                        // not JSON; the text search below still gets a go
+                    }
+                    if (found.isEmpty()) {
+                        found = imagesInText(body);
+                    }
                     if (!found.isEmpty()) {
                         apiImages = found;
                         firstPage = Document.createShell(url.toExternalForm());
                         return;
                     }
-                    tried.append("\n  api [").append(label).append("] -> no pages in the answer");
-                } catch (org.json.JSONException e) {
-                    tried.append("\n  api [").append(label).append("] -> HTTP ").append(r.statusCode()).append(' ')
-                            .append(body.length() > 80 ? body.substring(0, 80) : body).append(' ');
+                    tried.append("\n  ").append(endpoint.replace("https://nhentai.net", "")).append(" [").append(label)
+                            .append("] -> HTTP ").append(r.statusCode()).append(' ').append(snippet(body));
+                } catch (IOException e) {
+                    tried.append("\n  ").append(endpoint.replace("https://nhentai.net", "")).append(" [").append(label)
+                            .append("] -> ").append(e.getMessage());
                 }
-            } catch (IOException e) {
-                tried.append("\n  api [").append(label).append("] -> ").append(e.getMessage());
             }
         }
-        throw new IOException("nhentai did not show the gallery to the ripper (it may be asking for a browser check). "
-                + "Try Configuration -> Site cookies -> Import from browser for nhentai.net after opening the gallery "
-                + "in your browser. Every attempt:" + tried);
+        throw new IOException("nhentai did not show the gallery to the ripper (its browser check is in the way). Open the "
+                + "gallery in your browser, import its cookies (Configuration -> Site cookies -> Import from browser) and put "
+                + "that browser's user agent in the setting nhentai.useragent. Every attempt:" + tried);
+    }
+
+    private static String snippet(String body) {
+        String text = body == null ? "" : body.replaceAll("\\s+", " ").trim();
+        return text.length() > 120 ? text.substring(0, 120) : text;
+    }
+
+    /** Finds picture addresses like ".../galleries/4354205/12.webp" or ".../12t.webp" anywhere in text, in page order. */
+    public static List<String> imagesInText(String text) {
+        Matcher m = Pattern.compile("galleries/(\\d+)/(\\d+)t?\\.(jpg|jpeg|png|gif|webp)").matcher(text == null ? "" : text);
+        java.util.TreeMap<Integer, String> byPage = new java.util.TreeMap<>();
+        while (m.find()) {
+            int page = Integer.parseInt(m.group(2));
+            if (!byPage.containsKey(page)) {
+                byPage.put(page, "https://i" + (page % 4 + 1) + ".nhentai.net/galleries/" + m.group(1) + "/" + page + "." + m.group(3));
+            }
+        }
+        return new ArrayList<>(byPage.values());
     }
 
     /** Builds the full-size picture addresses from the gallery's data: {"media_id":"..","images":{"pages":[{"t":"j"}]}}. */
