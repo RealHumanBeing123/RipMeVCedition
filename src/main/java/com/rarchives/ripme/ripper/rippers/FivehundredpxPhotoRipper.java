@@ -46,7 +46,16 @@ public class FivehundredpxPhotoRipper extends AbstractJSONRipper {
     private static final Pattern GALLERY = Pattern.compile(
             "^https?://(?:www\\.)?500px\\.com/gallery/([A-Za-z0-9]+)(?:[/?#].*)?$");
 
+    private static final Pattern PROFILE = Pattern.compile(
+            "^https?://(?:www\\.)?500px\\.com/p/([A-Za-z0-9_.-]+)(?:/photos)?/?(?:[?#].*)?$");
+
     private static final int PAGE_SIZE = 24;
+    private static final int PROFILE_PAGE_SIZE = 20;
+
+    private String profileName = null;
+    private String profileUserId = null;
+    private boolean profileExcludeNsfw = false;
+    private boolean paged = false; // galleries and profiles come in pages
 
     // What the gallery question looks like once it has been worked out (argument name -> value), kept for the next pages.
     private Map<String, String> galleryArgs = null;
@@ -84,6 +93,10 @@ public class FivehundredpxPhotoRipper extends AbstractJSONRipper {
         m = GALLERY.matcher(url.toExternalForm());
         if (m.matches()) {
             return "gallery_" + m.group(1);
+        }
+        m = PROFILE.matcher(url.toExternalForm());
+        if (m.matches()) {
+            return "user_" + m.group(1);
         }
         String path = url.getPath() == null ? "" : url.getPath().replaceAll("[^A-Za-z0-9]+", "_");
         if (path.isEmpty() || path.equals("_")) {
@@ -251,6 +264,95 @@ public class FivehundredpxPhotoRipper extends AbstractJSONRipper {
         return changed;
     }
 
+    // ---- profile ----
+
+    private static List<String> suggestions(String errors) {
+        List<String> names = new ArrayList<>();
+        Matcher did = Pattern.compile("Did you mean ((?:\\\\?\"[A-Za-z0-9_]+\\\\?\"(?:, | or )?)+)\\?").matcher(errors);
+        while (did.find()) {
+            Matcher n = Pattern.compile("\\\\?\"([A-Za-z0-9_]+)\\\\?\"").matcher(did.group(1));
+            while (n.find()) {
+                names.add(n.group(1));
+            }
+        }
+        return names;
+    }
+
+    /** Turns the name in a /p/name link into 500px's user id, trying the likely lookup names and following 500px's own hints. */
+    private String resolveUserId(String username) throws IOException {
+        List<String[]> queue = new ArrayList<>(); // {field, argument, variable type}
+        for (String field : new String[] { "getUserByUsername", "getUserByName", "getUserByUserName", "getUser", "userByUsername" }) {
+            queue.add(new String[] { field, "username", "String!" });
+        }
+        java.util.Set<String> seen = new java.util.HashSet<>();
+        StringBuilder history = new StringBuilder();
+        for (int attempt = 0; attempt < queue.size() && attempt < 14; attempt++) {
+            String[] c = queue.get(attempt);
+            if (!seen.add(c[0] + "/" + c[1] + "/" + c[2])) {
+                continue;
+            }
+            String query = "query UserLookup($u: " + c[2] + ") { " + c[0] + "(" + c[1] + ": $u) { id username } }";
+            JSONObject reply = post("UserLookup", query, new JSONObject().put("u", username));
+            JSONObject data = reply.optJSONObject("data");
+            JSONObject user = data == null ? null : data.optJSONObject(c[0]);
+            if (user != null && !user.optString("id", "").isEmpty()) {
+                return user.getString("id");
+            }
+            String errors = String.valueOf(reply.opt("errors"));
+            history.append("\n  ").append(query).append("\n    -> ").append(errors.substring(0, Math.min(300, errors.length())));
+            // hints from 500px: other field names, other argument names, another variable type
+            for (String name : suggestions(errors)) {
+                if (errors.contains("on type") && errors.contains("Cannot query field") && name.toLowerCase().contains("user")) {
+                    queue.add(new String[] { name, c[1], c[2] });
+                } else if (errors.contains("Unknown argument")) {
+                    queue.add(new String[] { c[0], name, c[2] });
+                }
+            }
+            Matcher required = Pattern.compile("argument \\\\?\"(\\w+)\\\\?\" of type \\\\?\"([^\"\\\\]+)\\\\?\" is required").matcher(errors);
+            if (required.find()) {
+                queue.add(new String[] { c[0], required.group(1), required.group(2) });
+            }
+            Matcher mismatch = Pattern.compile("used in position expecting type \\\\?\"([^\"\\\\]+)\\\\?\"").matcher(errors);
+            if (mismatch.find()) {
+                queue.add(new String[] { c[0], c[1], mismatch.group(1) });
+            }
+        }
+        throw new IOException("Could not find 500px's id for the user '" + username + "'. What was asked and what 500px answered:" + history);
+    }
+
+    private static final String PROFILE_QUERY = "query pageResources($userId: ID!, $first: Int!, $after: String, "
+            + "$resourceTypes: [ResourceType!], $sort: ResourceSortOption = DEFAULT_ORDER, $excludeNsfw: Boolean) { "
+            + "pageResources(userId: $userId, first: $first, after: $after, resourceTypes: $resourceTypes, sort: $sort, "
+            + "excludeNsfw: $excludeNsfw) { totalCount edges { cursor node { __typename ... on Photo { id title "
+            + "urls { size_600 size_1024 size_2048 size_4k } } } } pageInfo { hasNextPage endCursor } } }";
+
+    private JSONObject profilePage(String after) throws IOException {
+        if (profileUserId == null) {
+            profileUserId = resolveUserId(profileName);
+        }
+        for (int tries = 0; tries < 2; tries++) {
+            JSONObject variables = new JSONObject()
+                    .put("userId", profileUserId)
+                    .put("first", PROFILE_PAGE_SIZE)
+                    .put("resourceTypes", new JSONArray().put("PHOTO"))
+                    .put("sort", "DEFAULT_ORDER")
+                    .put("excludeNsfw", profileExcludeNsfw)
+                    .put("after", after == null ? JSONObject.NULL : after);
+            JSONObject reply = post("pageResources", PROFILE_QUERY, variables);
+            JSONObject data = reply.optJSONObject("data");
+            JSONObject page = data == null ? null : data.optJSONObject("pageResources");
+            if (page != null) {
+                return page;
+            }
+            if (profileExcludeNsfw) {
+                String text = String.valueOf(reply);
+                throw new IOException("500px did not return this profile's photos: " + text.substring(0, Math.min(700, text.length())));
+            }
+            profileExcludeNsfw = true; // maybe adult pictures need a login; ask again without them
+        }
+        throw new IOException("500px did not return this profile's photos.");
+    }
+
     // ---- ripper plumbing ----
 
     @Override
@@ -262,22 +364,30 @@ public class FivehundredpxPhotoRipper extends AbstractJSONRipper {
         m = GALLERY.matcher(url.toExternalForm());
         if (m.matches()) {
             galleryId = m.group(1);
+            paged = true;
             return galleryPage(null);
         }
-        throw new IOException("500px favorites and profiles are not supported yet - only single photo links "
-                + "like https://500px.com/photo/<id> and gallery links like https://500px.com/gallery/<id>.");
+        m = PROFILE.matcher(url.toExternalForm());
+        if (m.matches()) {
+            profileName = m.group(1);
+            paged = true;
+            return profilePage(null);
+        }
+        throw new IOException("This kind of 500px page is not supported yet (favorites, liked photos and other lists). Supported: "
+                + "single photos https://500px.com/photo/<id>, galleries https://500px.com/gallery/<id> and "
+                + "profiles https://500px.com/p/<name>.");
     }
 
     @Override
     protected JSONObject getNextPage(JSONObject page) throws IOException, URISyntaxException {
         JSONObject info = page.optJSONObject("pageInfo");
         String cursor = info == null ? "" : info.optString("endCursor", "");
-        if (galleryId == null || info == null || !info.optBoolean("hasNextPage") || cursor.isEmpty() || cursor.equals(lastCursor)) {
+        if (!paged || info == null || !info.optBoolean("hasNextPage") || cursor.isEmpty() || cursor.equals(lastCursor)) {
             throw new IOException("No more pages");
         }
         lastCursor = cursor;
         sleep(1000);
-        return galleryPage(cursor);
+        return profileName != null ? profilePage(cursor) : galleryPage(cursor);
     }
 
     @Override
