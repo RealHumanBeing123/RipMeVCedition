@@ -251,21 +251,48 @@ public class ImgurRipper extends AbstractHTMLRipper {
         }
     }
 
+    /** The album code from links like https://imgur.com/a/Fkd0b, https://imgur.com/a/Fkd0b/all, https://imgur.com/gallery/Fkd0b?x. */
+    static String albumCode(URL url) {
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("/(?:a|gallery)/([A-Za-z0-9]+)").matcher(url.toExternalForm());
+        return m.find() ? m.group(1) : null;
+    }
+
     public static ImgurAlbum getImgurAlbum(URL url) throws IOException, URISyntaxException {
-        String strUrl = url.toExternalForm();
-        if (!strUrl.contains(",")) {
-            strUrl += "/all";
+        String code = albumCode(url);
+        if (code == null) {
+            throw new IOException("Could not find the album code in " + url);
         }
-        logger.info("    Retrieving " + strUrl);
-        Document doc = getAlbumData("https://api.imgur.com/3/album/" + strUrl.split("/a/")[1]);
-        // Try to use embedded JSON to retrieve images
-            try {
-                JSONObject json = new JSONObject(Jsoup.clean(doc.body().toString(), Safelist.none()));
-                JSONArray jsonImages = json.getJSONObject("data").getJSONArray("images");
-                return createImgurAlbumFromJsonArray(url, jsonImages);
-            } catch (JSONException | URISyntaxException e) {
-                logger.debug("Error while parsing JSON at " + url + ", continuing", e);
+        logger.info("    Retrieving " + url);
+        StringBuilder tried = new StringBuilder();
+        // 1) the long-standing public address (the old ".../all" ending is not an address imgur knows)
+        try {
+            Document doc = getAlbumData("https://api.imgur.com/3/album/" + code);
+            JSONObject json = new JSONObject(Jsoup.clean(doc.body().toString(), Safelist.none()));
+            JSONArray jsonImages = json.getJSONObject("data").getJSONArray("images");
+            ImgurAlbum album = createImgurAlbumFromJsonArray(url, jsonImages);
+            if (!album.images.isEmpty()) {
+                return album;
             }
+        } catch (IOException | JSONException | URISyntaxException e) {
+            tried.append("\n  /3/album/").append(code).append(" -> ").append(e.getMessage());
+            logger.debug("Error while reading the album at " + url + ", continuing", e);
+        }
+        // 2) the address imgur's own website uses (the same one single pictures already go through)
+        try {
+            JSONObject json = getSingleImageData("https://api.imgur.com/post/v1/albums/" + code + "?include=media,adconfig,account");
+            JSONArray media = json.getJSONArray("media");
+            ImgurAlbum album = new ImgurAlbum(url);
+            for (int i = 0; i < media.length(); i++) {
+                album.addImage(new ImgurImage(extractImageUrlFromJson(media.getJSONObject(i))));
+            }
+            if (!album.images.isEmpty()) {
+                return album;
+            }
+        } catch (IOException | JSONException | URISyntaxException e) {
+            tried.append("\n  /post/v1/albums/").append(code).append(" -> ").append(e.getMessage());
+            logger.debug("Error while reading the album with the website's address, continuing", e);
+        }
+        logger.warn("[!] Imgur's data addresses did not give the album:" + tried);
 
         // TODO If album is empty, use this to check for cached images:
         // http://i.rarchives.com/search.cgi?cache=http://imgur.com/a/albumID
@@ -273,7 +300,7 @@ public class ImgurRipper extends AbstractHTMLRipper {
 
         logger.info("[!] Falling back to /noscript method");
 
-        String newUrl = url.toExternalForm() + "/noscript";
+        String newUrl = "https://imgur.com/a/" + code + "/noscript";
         logger.info("    Retrieving " + newUrl);
         doc = Jsoup.connect(newUrl)
                             .userAgent(USER_AGENT)
