@@ -192,11 +192,35 @@ public class DoujivaRipper extends AbstractHTMLRipper {
         if (found.isEmpty()) {
             found.addAll(imagesInText(text, slug, chapter.number));
         }
-        if (found.isEmpty() && chapter.pageCount > 0) {
-            String ext = extensionGuess(page, text, slug, chapter.number);
-            for (int i = 1; i <= chapter.pageCount; i++) {
-                found.add(String.format("https://cdn.doujiva.com/%s/chapter-%d/%03d.%s", slug, chapter.number, i, ext));
+        if (chapter.pageCount > found.size()) {
+            // The page only lists the pictures it has loaded so far (often about 10); the chapter list knows
+            // the real page count, so fill in every missing page number.
+            String ext = null;
+            Set<Integer> have = new java.util.HashSet<>();
+            Matcher name = Pattern.compile("/(\\d+)\\.([A-Za-z0-9]+)(?:\\?.*)?$").matcher("");
+            for (String u : found) {
+                name.reset(u);
+                if (name.find()) {
+                    have.add(Integer.parseInt(name.group(1)));
+                    ext = name.group(2);
+                }
             }
+            if (ext == null) {
+                ext = extensionGuess(page, text, slug, chapter.number);
+            }
+            Set<String> all = new LinkedHashSet<>();
+            for (int i = 1; i <= chapter.pageCount; i++) {
+                String made = String.format("https://cdn.doujiva.com/%s/chapter-%d/%03d.%s", slug, chapter.number, i, ext);
+                String existing = null;
+                for (String u : found) {
+                    if (u.contains(String.format("/%03d.", i))) {
+                        existing = u;
+                        break;
+                    }
+                }
+                all.add(existing != null ? existing : made);
+            }
+            return new ArrayList<>(all);
         }
         return new ArrayList<>(found);
     }
