@@ -27,12 +27,33 @@ public class CoomerPartyRipper extends AbstractJSONRipper {
 
     private static final Logger logger = LogManager.getLogger(CoomerPartyRipper.class);
 
-    // the picture servers are n1..n4 (c1/c3 no longer exist); they all hold everything, so take turns
-    private int serverTurn = 0;
+    // The picture servers are n1..n4 of the site (c1/c3 no longer exist). Some of them may not answer from your
+    // connection, so the first one that accepts a connection is used for everything (found once, on first use).
+    private String dataBase = null;
 
     private String dataBase() {
-        serverTurn = serverTurn % 4 + 1;
-        return "https://n" + serverTurn + ".coomer.st/data";
+        if (dataBase == null) {
+            String site = "coomer.st";
+            String[] candidates = { "n1." + site, "n2." + site, "n3." + site, "n4." + site, site };
+            StringBuilder tried = new StringBuilder();
+            for (String candidate : candidates) {
+                try (java.net.Socket socket = new java.net.Socket()) {
+                    socket.connect(new java.net.InetSocketAddress(candidate, 443), 5000);
+                    dataBase = "https://" + candidate + "/data";
+                    break;
+                } catch (IOException e) {
+                    tried.append(' ').append(candidate).append(" (").append(e.getClass().getSimpleName()).append(')');
+                }
+            }
+            if (dataBase == null) {
+                logger.error("None of the picture servers answered from this computer:" + tried
+                        + ". Check your VPN/firewall/DNS; trying the main address anyway.");
+                dataBase = "https://" + site + "/data";
+            } else if (tried.length() > 0) {
+                logger.warn("Skipped picture servers that did not answer:" + tried + "; using " + dataBase);
+            }
+        }
+        return dataBase;
     }
     private static final Pattern IMG_PATTERN = Pattern.compile("^.*\\.(jpg|jpeg|png|gif|apng|webp|tif|tiff)$", Pattern.CASE_INSENSITIVE);
     private static final Pattern VID_PATTERN = Pattern.compile("^.*\\.(webm|mp4|m4v)$", Pattern.CASE_INSENSITIVE);

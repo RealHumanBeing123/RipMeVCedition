@@ -136,36 +136,34 @@ public class GelbooruRipper extends AbstractHTMLRipper {
 
     @Override
     public List<String> getURLsFromPage(Document page) {
+        // Only the post links are collected here; each post page is opened in downloadURL, one after another, so the
+        // first pictures start downloading straight away instead of after the whole result page was read.
         Set<String> urls = new LinkedHashSet<>();
-        if (isPost(page.location().isEmpty() ? url.toExternalForm() : page.location()) || page.select("article.thumbnail-preview").isEmpty()) {
-            String original = originalOn(page);
-            if (original != null) {
-                urls.add(original);
-            }
+        if (isPost(url.toExternalForm())) {
+            urls.add(url.toExternalForm());
             return new ArrayList<>(urls);
         }
         for (Element a : page.select("article.thumbnail-preview > a[href]")) {
             String postLink = a.absUrl("href");
-            if (postLink.isEmpty()) {
-                continue;
+            if (!postLink.isEmpty()) {
+                urls.add(postLink);
             }
-            try {
-                String original = originalOn(load(postLink));
-                if (original != null) {
-                    urls.add(original);
-                } else {
-                    logger.warn("No picture found on {}", postLink);
-                }
-            } catch (IOException e) {
-                logger.warn("Could not open {}: {}", postLink, e.getMessage());
-            }
-            sleep(500);
         }
         return new ArrayList<>(urls);
     }
 
     @Override
-    protected void downloadURL(URL url, int index) {
-        addURLToDownload(url, getPrefix(index), "", "https://gelbooru.com/", null);
+    protected void downloadURL(URL postUrl, int index) {
+        try {
+            String original = originalOn(load(postUrl.toExternalForm()));
+            if (original == null) {
+                logger.warn("No picture found on {}", postUrl);
+            } else {
+                addURLToDownload(new URL(original), getPrefix(index), "", "https://gelbooru.com/", null);
+            }
+        } catch (IOException e) {
+            logger.warn("Could not open {}: {}", postUrl, e.getMessage());
+        }
+        sleep(400);
     }
 }
