@@ -160,6 +160,18 @@ public class CoomerPartyRipper extends AbstractJSONRipper {
         return wrapperObject;
     }
 
+    /** An attachment is {name, path} itself (unlike a post, which keeps its main file under "file"). */
+    private void addAttachmentPath(String path, ArrayList<String> results) {
+        if (path.isEmpty()) {
+            return;
+        }
+        if (isImage(path)) {
+            results.add(imageUrl(path));
+        } else {
+            results.add(dataBase() + path); // videos and any other file type
+        }
+    }
+
     /**
      * The post's own web page lists every picture (links with class "fileThumb" and attachment links), so those
      * are added too in case the data answer left some out. Anything already known is dropped later.
@@ -279,7 +291,7 @@ public class CoomerPartyRipper extends AbstractJSONRipper {
             }
             for (int i = 0; i < attachments.length(); i++) {
                 JSONObject attachment = attachments.getJSONObject(i);
-                pullFileUrl(attachment, results);
+                addAttachmentPath(attachment.optString(KEY_PATH, ""), results);
             }
         } catch (JSONException e) {
              /* No-op */

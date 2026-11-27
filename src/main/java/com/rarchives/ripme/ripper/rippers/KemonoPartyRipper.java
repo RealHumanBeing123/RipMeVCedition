@@ -295,6 +295,18 @@ public class KemonoPartyRipper extends AbstractJSONRipper {
         }
     }
 
+    /** An attachment is {name, path} itself (unlike a post, which keeps its main file under "file"). */
+    private void addAttachmentPath(String path, ArrayList<String> results) {
+        if (path.isEmpty()) {
+            return;
+        }
+        if (isImage(path)) {
+            results.add(imageUrl(path));
+        } else {
+            results.add(dataBase() + path); // videos and any other file type
+        }
+    }
+
     /**
      * Retrieves the URLs of attachments from a given JSONObject and adds them to the provided list.
      *
@@ -309,7 +321,7 @@ public class KemonoPartyRipper extends AbstractJSONRipper {
             }
             for (int i = 0; i < attachments.length(); i++) {
                 JSONObject attachment = attachments.getJSONObject(i);
-                pullFileUrl(attachment, results);
+                addAttachmentPath(attachment.optString(KEY_PATH, ""), results);
             }
         } catch (JSONException e) {
             /* No-op */
