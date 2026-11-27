@@ -103,6 +103,63 @@ public class PawchiveRipper extends AbstractJSONRipper {
         }
         return base + path;
     }
+    private String lastGoodServer = null;
+    private int probesLogged = 0;
+
+    /** Status code of a one-byte request for the file (with the site as referrer), or -1 when there was no answer. */
+    private static int probeStatus(String address) {
+        try {
+            java.net.HttpURLConnection c = (java.net.HttpURLConnection) java.net.URI.create(address).toURL().openConnection();
+            c.setConnectTimeout(8000);
+            c.setReadTimeout(8000);
+            c.setInstanceFollowRedirects(true);
+            c.setRequestProperty("Range", "bytes=0-0");
+            c.setRequestProperty("Referer", "https://" + API_HOST + "/");
+            c.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:161.0) Gecko/20100101 Firefox/161.0");
+            return c.getResponseCode();
+        } catch (Exception e) {
+            return -1;
+        }
+    }
+
+    /** /2ac/a0/hash.jpg (picture path) -> /ac/a0/hash.jpg (the preview server leaves off the first letter). */
+    private static String previewPath(String path) {
+        int slash = path.indexOf('/', 1);
+        if (slash == 4 && path.charAt(0) == '/') {
+            return "/" + path.substring(2, slash) + path.substring(slash);
+        }
+        return path;
+    }
+
+    /**
+     * Address of a file. Each of the picture servers n1..n4 keeps only some files (and refuses the others), so
+     * each is asked in turn, with the site as referrer, until one serves the file. If none does, pictures fall
+     * back to the preview server (reduced size).
+     */
+    private String fileUrl(String path) {
+        List<String> hosts = new ArrayList<>(Arrays.asList("n1", "n2", "n3", "n4"));
+        if (lastGoodServer != null && hosts.remove(lastGoodServer)) {
+            hosts.add(0, lastGoodServer);
+        }
+        StringBuilder tried = new StringBuilder();
+        for (String h : hosts) {
+            String address = "https://" + h + "." + API_HOST + "/data" + path;
+            int code = probeStatus(address);
+            tried.append(' ').append(h).append('=').append(code);
+            if (code == 200 || code == 206) {
+                lastGoodServer = h;
+                return address;
+            }
+        }
+        if (probesLogged++ < 5) {
+            LOGGER.warn("No picture server served " + path + " (status per server:" + tried + ")");
+        }
+        if (isImage(path)) {
+            return "https://img." + API_HOST + "/thumbnail/data" + previewPath(path);
+        }
+        return "https://n1." + API_HOST + "/data" + path;
+    }
+
     private static final Pattern IMG_PATTERN = Pattern.compile("^.*\\.(jpg|jpeg|png|gif|apng|webp|tif|tiff)$", Pattern.CASE_INSENSITIVE);
     private static final Pattern VID_PATTERN = Pattern.compile("^.*\\.(webm|mp4|m4v)$", Pattern.CASE_INSENSITIVE);
 
@@ -288,7 +345,7 @@ public class PawchiveRipper extends AbstractJSONRipper {
 
     @Override
     protected void downloadURL(URL url, int index) {
-        addURLToDownload(url, getPrefix(index));
+        addURLToDownload(url, getPrefix(index), "", "https://" + API_HOST + "/", null);
     }
 
     /**
@@ -305,10 +362,10 @@ public class PawchiveRipper extends AbstractJSONRipper {
             }
             String path = file.getString(KEY_PATH);
             if (isImage(path)) {
-                String url = imageUrl(path);
+                String url = fileUrl(path);
                 results.add(url);
             } else if (isVideo(path)) {
-                String url = dataBase() + path;
+                String url = fileUrl(path);
                 results.add(url);
             } else {
                 LOGGER.error("Unknown extension for " + API_HOST + " path: " + path);
@@ -324,9 +381,9 @@ public class PawchiveRipper extends AbstractJSONRipper {
             return;
         }
         if (isImage(path)) {
-            results.add(imageUrl(path));
+            results.add(fileUrl(path));
         } else {
-            results.add(dataBase() + path); // videos and any other file type
+            results.add(fileUrl(path)); // videos and any other file type
         }
     }
 
