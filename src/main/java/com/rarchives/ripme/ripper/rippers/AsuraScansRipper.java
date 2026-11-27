@@ -69,23 +69,33 @@ public class AsuraScansRipper extends AbstractHTMLRipper {
         return m.group(3) == null ? m.group(2) : m.group(2) + "_chapter" + m.group(3);
     }
 
-    private static Http load(String address) {
-        String ua = Utils.getConfigString("asura.useragent", "").trim();
-        Http http = Http.url(address);
-        if (!ua.isEmpty()) {
-            http.userAgent(ua);
-        } else {
-            http.userAgent(AbstractRipper.USER_AGENT);
+    /** The user agent to send: asura.useragent, else nhentai.useragent (same browser, same Cloudflare rule), else ours. */
+    private static String userAgent() {
+        for (String key : new String[] { "asura.useragent", "nhentai.useragent" }) {
+            String ua = Utils.getConfigString(key, "").trim();
+            if (!ua.isEmpty()) {
+                return ua;
+            }
         }
-        return http;
+        return AbstractRipper.USER_AGENT;
     }
 
     private static Document fetch(String address) throws IOException {
-        Document doc = load(address).get();
+        String ua = userAgent();
+        Document doc;
+        try {
+            doc = Http.url(address).userAgent(ua).get();
+        } catch (IOException e) {
+            throw new IOException(e.getMessage() + " | Asura Scans (Cloudflare) only accepts the browser that passed its check: "
+                    + "its cookie (cf_clearance) works only together with that browser's exact user agent. "
+                    + "User agent sent now: " + ua + " | If that is not your browser's, put the browser's user agent "
+                    + "(search \"what is my user agent\" in that browser) in the setting asura.useragent, open the page in "
+                    + "that browser until it loads, then import its cookies again.", e);
+        }
         if (doc.title().toLowerCase().contains("just a moment")) {
             throw new IOException("Asura Scans answered with Cloudflare's \"Just a moment...\" check instead of the page. "
-                    + "Import your browser cookies (Configuration - Site cookies - Import from browser) after opening the "
-                    + "site in that browser, and put that browser's user agent in the setting asura.useragent.");
+                    + "User agent sent: " + ua + ". Import your browser cookies after the page has loaded in that browser, "
+                    + "and put that browser's user agent in the setting asura.useragent.");
         }
         return doc;
     }
