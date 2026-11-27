@@ -42,6 +42,16 @@ class DownloadFileThread implements Runnable {
 
     private final int retrySleep;
 
+    private static void closeQuietly(java.io.Closeable c) {
+        if (c != null) {
+            try {
+                c.close();
+            } catch (IOException ignored) {
+                // nothing more to do
+            }
+        }
+    }
+
     public DownloadFileThread(TokenedUrlGetter tug, RipUrlId ripUrlId, Path directory, String filename, AbstractRipper observer, Boolean getFileExtFromMIME) {
         super();
         this.tokenedUrlGetter = tug;
@@ -135,6 +145,13 @@ class DownloadFileThread implements Runnable {
         }
         boolean redirected = false;
         int tries = 0; // Number of attempts to download
+        // Bunkr's file servers often cut big videos off, answer "busy" (503) or "slow down" (429). For them a
+        // failed attempt is continued from where it stopped (HTTP Range) instead of being given up on.
+        String firstHost = url.getHost() == null ? "" : url.getHost().toLowerCase();
+        final boolean patientHost = firstHost.endsWith("cdn.cr") || firstHost.endsWith("scdn.st");
+        long retryFrom = 0;
+        java.io.Closeable openIn = null;
+        java.io.Closeable openOut = null;
         do {
             tries += 1;
             try {
@@ -188,6 +205,9 @@ class DownloadFileThread implements Runnable {
                         huc.setRequestProperty("Range", "bytes=" + fileSize + "-");
                     }
                 }
+                if (retryFrom > 0) {
+                    huc.setRequestProperty("Range", "bytes=" + retryFrom + "-");
+                }
                 logger.debug(Utils.getLocalizedString("request.properties") + ": " + huc.getRequestProperties());
                 huc.connect();
 
@@ -213,6 +233,11 @@ class DownloadFileThread implements Runnable {
                     url = url.toURI().resolve(location).toURL(); // TODO fix redirect with TokenedUrlGetter
                     logger.debug("Redirect status code {} - redirect to {}", statusCode, location);
                     continue; // retry
+                }
+                if (statusCode == 429 && patientHost && tries < 30) {
+                    logger.warn("[!] Server says slow down (429) for " + url + " - waiting before trying again");
+                    Utils.sleep(Math.min(tries, 6) * 5000);
+                    continue;
                 }
                 if (statusCode / 100 == 4) { // 4xx errors
                     try {
@@ -242,7 +267,7 @@ class DownloadFileThread implements Runnable {
                     logger.debug("Retriable status code {} while downloading {}", statusCode, url);
                     // A busy server ("503") needs a pause, not an instant retry: waiting a little longer
                     // each time, and giving up after 20 tries instead of asking forever.
-                    if (tries >= 20) {
+                    if (tries >= (patientHost ? 40 : 20)) {
                         logger.error("[!] Server kept answering " + statusCode + " for " + url);
                         observer.downloadErrored(ripUrlId,
                                 Utils.getLocalizedString("failed.to.download") + " " + url.toExternalForm());
@@ -270,6 +295,7 @@ class DownloadFileThread implements Runnable {
                 // Save file
                 InputStream bis;
                 bis = new BufferedInputStream(huc.getInputStream());
+                openIn = bis;
 
                 // Check if we should get the file ext from the MIME type
                 if (getFileExtFromMIME) {
@@ -328,6 +354,7 @@ class DownloadFileThread implements Runnable {
                         assert fos != null: e.getStackTrace();
                     }
                 }
+                openOut = fos;
                 byte[] data = new byte[1024 * 256];
                 int bytesRead;
                 boolean shouldSkipFileDownload = huc.getContentLength() / 1000000 >= 10 && AbstractRipper.isThisATest();
@@ -373,6 +400,13 @@ class DownloadFileThread implements Runnable {
             } catch (SocketTimeoutException timeoutEx) {
                 // Handle the timeout
                 logger.error("[!] " + url.toExternalForm() + " timedout!");
+                if (patientHost && tries < 30) {
+                    closeQuietly(openIn);
+                    closeQuietly(openOut);
+                    retryFrom = saveAs.exists() ? saveAs.length() : 0;
+                    Utils.sleep(Math.min(tries, 5) * 3000);
+                    continue;
+                }
                 // Download failed, break out of loop
                 break;
             } catch (HttpStatusException hse) {
@@ -390,15 +424,14 @@ class DownloadFileThread implements Runnable {
                     return;
                 }
                 logger.debug("IOException", e);
-                String errHost = url.getHost() == null ? "" : url.getHost().toLowerCase();
-                if (tries < 6 && (errHost.endsWith("cdn.cr") || errHost.endsWith("scdn.st"))) {
-                    // Bunkr's file servers sometimes cut a big video off part-way ("Premature EOF").
-                    // Start that file again after a short wait instead of giving up.
-                    logger.warn("[!] Connection cut while downloading " + url + " (" + e.getMessage() + "), trying again");
-                    if (!observer.tryResumeDownload() && saveAs.exists() && !saveAs.delete()) {
-                        logger.error("could not delete partial file: " + saveAs.getAbsolutePath());
-                    }
-                    Utils.sleep(tries * 3000);
+                if (patientHost && tries < 40) {
+                    // The server cut the file off part-way ("Premature EOF"). Close the half-written file and
+                    // carry on from where it stopped; every try that gets further counts as progress.
+                    logger.warn("[!] Connection cut while downloading " + url + " (" + e.getMessage() + "), continuing");
+                    closeQuietly(openIn);
+                    closeQuietly(openOut);
+                    retryFrom = saveAs.exists() ? saveAs.length() : 0;
+                    Utils.sleep(Math.min(tries, 5) * 3000);
                     continue;
                 }
                 logger.error("[!] " + Utils.getLocalizedString("exception.while.downloading.file") + ": " + url + " - "
