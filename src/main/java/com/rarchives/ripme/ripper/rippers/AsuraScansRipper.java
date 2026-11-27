@@ -69,6 +69,8 @@ public class AsuraScansRipper extends AbstractHTMLRipper {
         return m.group(3) == null ? m.group(2) : m.group(2) + "_chapter" + m.group(3);
     }
 
+    private static final String FIREFOX_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:161.0) Gecko/20100101 Firefox/161.0";
+
     /** The user agent to send: asura.useragent, else nhentai.useragent (same browser, same Cloudflare rule), else ours. */
     private static String userAgent() {
         for (String key : new String[] { "asura.useragent", "nhentai.useragent" }) {
@@ -77,7 +79,8 @@ public class AsuraScansRipper extends AbstractHTMLRipper {
                 return ua;
             }
         }
-        return AbstractRipper.USER_AGENT;
+        // Nothing set: assume the Firefox the cookies are imported from (its user agent as seen in your own browser).
+        return FIREFOX_USER_AGENT;
     }
 
     private static Document fetch(String address) throws IOException {
