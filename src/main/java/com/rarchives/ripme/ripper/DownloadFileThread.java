@@ -240,6 +240,15 @@ class DownloadFileThread implements Runnable {
                     observer.downloadErrored(ripUrlId, Utils.getLocalizedString("retriable.status.code") + " " + statusCode
                             + " while downloading " + url.toExternalForm());
                     logger.debug("Retriable status code {} while downloading {}", statusCode, url);
+                    // A busy server ("503") needs a pause, not an instant retry: waiting a little longer
+                    // each time, and giving up after 20 tries instead of asking forever.
+                    if (tries >= 20) {
+                        logger.error("[!] Server kept answering " + statusCode + " for " + url);
+                        observer.downloadErrored(ripUrlId,
+                                Utils.getLocalizedString("failed.to.download") + " " + url.toExternalForm());
+                        return;
+                    }
+                    Utils.sleep(Math.min(tries, 10) * 1500);
                     continue; // retry
                 }
                 if (huc.getContentLength() == 503 && url.getHost().endsWith("imgur.com")) {
@@ -381,6 +390,17 @@ class DownloadFileThread implements Runnable {
                     return;
                 }
                 logger.debug("IOException", e);
+                String errHost = url.getHost() == null ? "" : url.getHost().toLowerCase();
+                if (tries < 6 && (errHost.endsWith("cdn.cr") || errHost.endsWith("scdn.st"))) {
+                    // Bunkr's file servers sometimes cut a big video off part-way ("Premature EOF").
+                    // Start that file again after a short wait instead of giving up.
+                    logger.warn("[!] Connection cut while downloading " + url + " (" + e.getMessage() + "), trying again");
+                    if (!observer.tryResumeDownload() && saveAs.exists() && !saveAs.delete()) {
+                        logger.error("could not delete partial file: " + saveAs.getAbsolutePath());
+                    }
+                    Utils.sleep(tries * 3000);
+                    continue;
+                }
                 logger.error("[!] " + Utils.getLocalizedString("exception.while.downloading.file") + ": " + url + " - "
                         + e.getMessage());
                 observer.downloadErrored(ripUrlId, e.getMessage());
