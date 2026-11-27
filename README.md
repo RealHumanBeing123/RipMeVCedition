@@ -41,7 +41,8 @@ The list of supported rippers includes:
 - sankaku (both the original forum website and their secondary AI image gen site)
 - reddit (uses browser cookies)
 - deviantart (can only download single images and the first 10 in a gallery)
-- [etc](https://github.com/ripmeapp/ripme/wiki/Supported-Sites)
+- [there are the sites that the original version supports](https://github.com/ripmeapp/ripme/wiki/Supported-Sites)
+- [here are the new sites that I've added support for](https://github.com/RealHumanBeing123/RipMeVCedition/wiki#sites-that-work)
 
 Support by browser:
 
