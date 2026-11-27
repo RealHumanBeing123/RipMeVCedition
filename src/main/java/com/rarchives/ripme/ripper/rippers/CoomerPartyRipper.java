@@ -56,6 +56,25 @@ public class CoomerPartyRipper extends AbstractJSONRipper {
         return dataBase;
     }
 
+    private Boolean imgHostHasOriginals = null;
+
+    /** True when the address answers with a picture (not a web page or an error); asks for the first byte only. */
+    private static boolean probeOriginals(String address) {
+        try {
+            java.net.HttpURLConnection c = (java.net.HttpURLConnection) java.net.URI.create(address).toURL().openConnection();
+            c.setConnectTimeout(8000);
+            c.setReadTimeout(8000);
+            c.setInstanceFollowRedirects(false);
+            c.setRequestProperty("Range", "bytes=0-0");
+            c.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:161.0) Gecko/20100101 Firefox/161.0");
+            int code = c.getResponseCode();
+            String type = String.valueOf(c.getContentType()).toLowerCase();
+            return (code == 200 || code == 206) && !type.startsWith("text/");
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
     private boolean warnedThumbnails = false;
 
     /**
@@ -71,6 +90,13 @@ public class CoomerPartyRipper extends AbstractJSONRipper {
                 warnedThumbnails = true;
                 logger.warn("The picture servers cannot be reached from this computer, so pictures are taken from https://img."
                         + site + " instead. These are reduced-size copies, not the originals.");
+            }
+            if (imgHostHasOriginals == null) {
+                imgHostHasOriginals = probeOriginals("https://img." + site + "/data" + path);
+                logger.info("Full-size files from https://img." + site + "/data: " + (imgHostHasOriginals ? "available, using them" : "not available"));
+            }
+            if (imgHostHasOriginals) {
+                return "https://img." + site + "/data" + path;
             }
             return "https://img." + site + "/thumbnail/data" + path;
         }
