@@ -160,6 +160,35 @@ public class CoomerPartyRipper extends AbstractJSONRipper {
         return wrapperObject;
     }
 
+    /**
+     * The post's own web page lists every picture (links with class "fileThumb" and attachment links), so those
+     * are added too in case the data answer left some out. Anything already known is dropped later.
+     */
+    private void addPageLinks(JSONObject post) {
+        try {
+            org.jsoup.nodes.Document page = Http.url(url).get();
+            JSONArray list = post.optJSONArray("attachments");
+            if (list == null) {
+                list = new JSONArray();
+                post.put("attachments", list);
+            }
+            int added = 0;
+            for (org.jsoup.nodes.Element a : page.select("a.fileThumb[href], a.post__attachment-link[href]")) {
+                String href = a.attr("abs:href");
+                int at = href.indexOf("/data/");
+                if (at < 0) {
+                    continue;
+                }
+                String path = href.substring(at + 5).replaceAll("[?#].*$", "");
+                list.put(new JSONObject().put("name", path.substring(path.lastIndexOf('/') + 1)).put("path", path));
+                added++;
+            }
+            logger.debug("Found " + added + " picture links on the post page");
+        } catch (Exception e) {
+            logger.warn("Could not read the post page for more pictures: " + e);
+        }
+    }
+
     @Override
     protected JSONObject getFirstPage() throws IOException {
         if (postId != null) {
@@ -178,6 +207,9 @@ public class CoomerPartyRipper extends AbstractJSONRipper {
                 post.put("attachments", extra);
             }
         }
+        logger.debug("Post answer has: " + reply.keySet() + "; the post has " + post.keySet() + ", "
+                + (post.optJSONArray("attachments") == null ? 0 : post.optJSONArray("attachments").length()) + " attachments");
+        addPageLinks(post);
             JSONObject wrapperObject = new JSONObject();
             wrapperObject.put(KEY_WRAPPER_JSON_ARRAY, new JSONArray().put(post));
             return wrapperObject;
