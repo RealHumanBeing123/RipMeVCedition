@@ -55,6 +55,27 @@ public class CoomerPartyRipper extends AbstractJSONRipper {
         }
         return dataBase;
     }
+
+    private boolean warnedThumbnails = false;
+
+    /**
+     * Address of a picture. When none of the picture servers (n1..n4) can be reached from this computer, the
+     * full-size files cannot be downloaded, but the site's separate thumbnail server (img.<site>) usually can.
+     * Its copies are smaller than the originals, so a warning is written to the log.
+     */
+    private String imageUrl(String path) {
+        String base = dataBase();
+        String site = "coomer.st";
+        if (base.equals("https://" + site + "/data")) {
+            if (!warnedThumbnails) {
+                warnedThumbnails = true;
+                logger.warn("The picture servers cannot be reached from this computer, so pictures are taken from https://img."
+                        + site + " instead. These are reduced-size copies, not the originals.");
+            }
+            return "https://img." + site + "/thumbnail/data" + path;
+        }
+        return base + path;
+    }
     private static final Pattern IMG_PATTERN = Pattern.compile("^.*\\.(jpg|jpeg|png|gif|apng|webp|tif|tiff)$", Pattern.CASE_INSENSITIVE);
     private static final Pattern VID_PATTERN = Pattern.compile("^.*\\.(webm|mp4|m4v)$", Pattern.CASE_INSENSITIVE);
 
@@ -192,7 +213,7 @@ public class CoomerPartyRipper extends AbstractJSONRipper {
             }
             String path = file.getString(KEY_PATH);
             if (isImage(path)) {
-                String url = dataBase() + path;
+                String url = imageUrl(path);
                 results.add(url);
             } else if (isVideo(path)) {
                 String url = dataBase() + path;
