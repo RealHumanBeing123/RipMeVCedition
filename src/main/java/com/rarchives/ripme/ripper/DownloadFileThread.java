@@ -166,6 +166,8 @@ class DownloadFileThread implements Runnable {
                     // a web browser but don't behave like one. A plain command-line client identity is let
                     // through (verified with curl), so use that.
                     huc.setRequestProperty("User-agent", "curl/8.4.0");
+                } else if (host.equals("pawchive.pw") || host.endsWith(".pawchive.pw")) {
+                    huc.setRequestProperty("User-agent", AbstractRipper.PAWCHIVE_USER_AGENT);
                 } else {
                     huc.setRequestProperty("User-agent", AbstractRipper.USER_AGENT);
                 }

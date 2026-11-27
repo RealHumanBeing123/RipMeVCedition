@@ -67,6 +67,8 @@ public abstract class AbstractRipper
 
     private final String URLHistoryFile = Utils.getURLHistoryFile();
 
+    /** Honest, identifiable agent for sites (Pawchive) that refuse tools pretending to be browsers. */
+    public static final String PAWCHIVE_USER_AGENT = "RipMeVCedition/1.0 (+https://github.com/RealHumanBeing123/RipMeVCedition)";
     public static final String USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36";
 
     private static Random randomGenerator = new Random();

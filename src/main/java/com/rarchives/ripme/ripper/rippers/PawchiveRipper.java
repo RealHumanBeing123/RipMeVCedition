@@ -1,6 +1,7 @@
 package com.rarchives.ripme.ripper.rippers;
 
 import com.rarchives.ripme.ripper.AbstractJSONRipper;
+import com.rarchives.ripme.ripper.AbstractRipper;
 import com.rarchives.ripme.utils.Http;
 import com.rarchives.ripme.utils.Utils;
 import org.apache.logging.log4j.LogManager;
@@ -67,7 +68,7 @@ public class PawchiveRipper extends AbstractJSONRipper {
             c.setReadTimeout(8000);
             c.setInstanceFollowRedirects(false);
             c.setRequestProperty("Range", "bytes=0-0");
-            c.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:161.0) Gecko/20100101 Firefox/161.0");
+            c.setRequestProperty("User-Agent", AbstractRipper.PAWCHIVE_USER_AGENT);
             int code = c.getResponseCode();
             String type = String.valueOf(c.getContentType()).toLowerCase();
             return (code == 200 || code == 206) && !type.startsWith("text/");
@@ -115,7 +116,7 @@ public class PawchiveRipper extends AbstractJSONRipper {
             c.setInstanceFollowRedirects(true);
             c.setRequestProperty("Range", "bytes=0-0");
             c.setRequestProperty("Referer", "https://" + API_HOST + "/");
-            c.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:161.0) Gecko/20100101 Firefox/161.0");
+            c.setRequestProperty("User-Agent", AbstractRipper.PAWCHIVE_USER_AGENT);
             return c.getResponseCode();
         } catch (Exception e) {
             return -1;
@@ -136,22 +137,35 @@ public class PawchiveRipper extends AbstractJSONRipper {
      * each is asked in turn, with the site as referrer, until one serves the file. If none does, pictures fall
      * back to the preview server (reduced size).
      */
-    private String fileUrl(String path) {
+    private String fileUrl(String path, String name) {
         List<String> hosts = new ArrayList<>(Arrays.asList("n1", "n2", "n3", "n4"));
         if (lastGoodServer != null && hosts.remove(lastGoodServer)) {
             hosts.add(0, lastGoodServer);
         }
+        // The site's own download links end in ?f=<file name>; try with it first, then without.
+        String withName = name == null || name.isEmpty() ? null
+                : "?f=" + java.net.URLEncoder.encode(name, java.nio.charset.StandardCharsets.UTF_8).replace("+", "%20");
         StringBuilder tried = new StringBuilder();
         for (String h : hosts) {
-            String address = "https://" + h + "." + API_HOST + "/data" + path;
-            int code = probeStatus(address);
-            tried.append(' ').append(h).append('=').append(code);
-            if (code == 200 || code == 206) {
-                lastGoodServer = h;
-                return address;
+            for (String query : new String[] { "" }) {
+                String address = "https://" + h + "." + API_HOST + "/data" + path + query;
+                try {
+                    Thread.sleep(1000); // the site asks for at most 1 request per second
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                }
+                int code = probeStatus(address);
+                tried.append(' ').append(h).append(query.isEmpty() ? "" : "+f").append('=').append(code);
+                if (code == 200 || code == 206) {
+                    lastGoodServer = h;
+                    if (probesLogged++ < 3) {
+                        LOGGER.info("Picture server answer for " + path + ":" + tried);
+                    }
+                    return address;
+                }
             }
         }
-        if (probesLogged++ < 5) {
+        if (probesLogged++ < 6) {
             LOGGER.warn("No picture server served " + path + " (status per server:" + tried + ")");
         }
         if (isImage(path)) {
@@ -345,7 +359,18 @@ public class PawchiveRipper extends AbstractJSONRipper {
 
     @Override
     protected void downloadURL(URL url, int index) {
-        addURLToDownload(url, getPrefix(index), "", "https://" + API_HOST + "/", null);
+        String file = url.getPath().substring(url.getPath().lastIndexOf('/') + 1);
+        java.util.Map<String, String> options = new java.util.LinkedHashMap<>();
+        options.put("prefix", getPrefix(index));
+        options.put("referrer", "https://" + API_HOST + "/");
+        if (!file.isEmpty()) {
+            options.put("fileName", file.replaceAll("\\.[A-Za-z0-9]+$", ""));
+            int dot = file.lastIndexOf('.');
+            if (dot > 0) {
+                options.put("extension", file.substring(dot + 1));
+            }
+        }
+        addURLToDownload(url, options);
     }
 
     /**
@@ -361,11 +386,12 @@ public class PawchiveRipper extends AbstractJSONRipper {
                 return; // this post has no main file (only text or attachments)
             }
             String path = file.getString(KEY_PATH);
+            String name = file.optString("name", "");
             if (isImage(path)) {
-                String url = fileUrl(path);
+                String url = fileUrl(path, name);
                 results.add(url);
             } else if (isVideo(path)) {
-                String url = fileUrl(path);
+                String url = fileUrl(path, name);
                 results.add(url);
             } else {
                 LOGGER.error("Unknown extension for " + API_HOST + " path: " + path);
@@ -376,15 +402,11 @@ public class PawchiveRipper extends AbstractJSONRipper {
     }
 
     /** An attachment is {name, path} itself (unlike a post, which keeps its main file under "file"). */
-    private void addAttachmentPath(String path, ArrayList<String> results) {
+    private void addAttachmentPath(String path, String name, ArrayList<String> results) {
         if (path.isEmpty()) {
             return;
         }
-        if (isImage(path)) {
-            results.add(fileUrl(path));
-        } else {
-            results.add(fileUrl(path)); // videos and any other file type
-        }
+        results.add(fileUrl(path, name)); // pictures, videos and any other file type
     }
 
     /**
@@ -401,7 +423,7 @@ public class PawchiveRipper extends AbstractJSONRipper {
             }
             for (int i = 0; i < attachments.length(); i++) {
                 JSONObject attachment = attachments.getJSONObject(i);
-                addAttachmentPath(attachment.optString(KEY_PATH, ""), results);
+                addAttachmentPath(attachment.optString(KEY_PATH, ""), attachment.optString("name", ""), results);
             }
         } catch (JSONException e) {
             /* No-op */
