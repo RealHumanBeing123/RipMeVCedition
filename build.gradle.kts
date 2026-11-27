@@ -99,6 +99,7 @@ tasks.withType<Jar> {
 }
 
 tasks.shadowJar {
+  mergeServiceFiles()
   transform<com.github.jengelman.gradle.plugins.shadow.transformers.Log4j2PluginsCacheFileTransformer>()
 }
 

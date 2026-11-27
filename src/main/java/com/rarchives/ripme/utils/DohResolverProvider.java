@@ -16,6 +16,8 @@ import java.util.stream.Stream;
 import java.net.spi.InetAddressResolver;
 import java.net.spi.InetAddressResolverProvider;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -31,6 +33,7 @@ import org.json.JSONObject;
  */
 public class DohResolverProvider extends InetAddressResolverProvider {
 
+    private static final Logger logger = LogManager.getLogger(DohResolverProvider.class);
     private static final String DEFAULT_DOMAINS = "kemono.cr,kemono.su,kemono.party,coomer.st,coomer.su,coomer.party";
     // Addresses (not names), so asking them needs no lookup of its own.
     private static final String[] SERVERS = { "https://1.1.1.1/dns-query", "https://8.8.8.8/resolve" };
@@ -64,6 +67,9 @@ public class DohResolverProvider extends InetAddressResolverProvider {
                         cached = found.isEmpty() ? null : new Cached(found);
                         if (cached != null) {
                             cache.put(key, cached);
+                            logger.info("DNS over HTTPS: " + key + " -> " + cached.addresses);
+                        } else {
+                            logger.warn("DNS over HTTPS gave no answer for " + key + "; using the normal lookup");
                         }
                     }
                     if (cached != null) {
@@ -126,7 +132,7 @@ public class DohResolverProvider extends InetAddressResolverProvider {
                     return found;
                 }
             } catch (IOException | RuntimeException e) {
-                // try the next server
+                logger.debug("DNS over HTTPS server " + server + " failed for " + host + ": " + e);
             }
         }
         return new ArrayList<>();
