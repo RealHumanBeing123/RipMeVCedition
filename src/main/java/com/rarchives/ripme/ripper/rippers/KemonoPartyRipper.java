@@ -164,6 +164,17 @@ public class KemonoPartyRipper extends AbstractJSONRipper {
         String body = Http.url(apiUrl).ignoreContentType().header("Accept", "text/css").response().body();
         JSONObject reply = new JSONObject(body);
         JSONObject post = reply.has("post") ? reply.getJSONObject("post") : reply;
+        // The single-post answer keeps the pictures next to the post ("attachments", "previews"), not inside it.
+        if (reply.has("post")) {
+            JSONArray extra = reply.optJSONArray("attachments");
+            if (extra == null || extra.isEmpty()) {
+                extra = reply.optJSONArray("previews");
+            }
+            JSONArray own = post.optJSONArray("attachments");
+            if (extra != null && !extra.isEmpty() && (own == null || own.isEmpty())) {
+                post.put("attachments", extra);
+            }
+        }
         JSONObject wrapperObject = new JSONObject();
         wrapperObject.put(KEY_WRAPPER_JSON_ARRAY, new JSONArray().put(post));
         return wrapperObject;
@@ -209,12 +220,13 @@ public class KemonoPartyRipper extends AbstractJSONRipper {
     protected List<String> getURLsFromJSON(JSONObject json) {
         // extract the array from our wrapper JSONObject
         JSONArray posts = json.getJSONArray(KEY_WRAPPER_JSON_ARRAY);
-        ArrayList<String> urls = new ArrayList<>();
+        ArrayList<String> collected = new ArrayList<>();
         for (int i = 0; i < posts.length(); i++) {
             JSONObject post = posts.getJSONObject(i);
-            pullFileUrl(post, urls);
-            pullAttachmentUrls(post, urls);
+            pullFileUrl(post, collected);
+            pullAttachmentUrls(post, collected);
         }
+        ArrayList<String> urls = new ArrayList<>(new java.util.LinkedHashSet<>(collected)); // same file twice: keep one
         LOGGER.debug("Pulled " + urls.size() + " URLs from " + posts.length() + " posts");
         return urls;
     }
