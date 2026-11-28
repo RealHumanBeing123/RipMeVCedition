@@ -143,7 +143,8 @@ public class LeakGalleryRipper extends AbstractHTMLRipper {
             throw new IOException("No more pages");
         }
         pageNo = n;
-        Document next = Jsoup.parse("<html><body></body></html>");
+        logger.info("Loaded page " + n + " (" + medias.length() + " items)");
+        Document next = Jsoup.parse("<html><body></body></html>", API + "/profile/" + model() + "/" + n);
         next.body().attr("data-medias", medias.toString());
         return next;
     }
