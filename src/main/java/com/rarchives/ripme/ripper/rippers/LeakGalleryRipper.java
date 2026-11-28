@@ -176,26 +176,48 @@ public class LeakGalleryRipper extends AbstractHTMLRipper {
         return new ArrayList<>(urls);
     }
 
-    /** The "Load more" button: more of the model's items from the site's API (address guessed from the page's own). */
+    private static final String API = "https://api.leakgallery.com";
+
+    /**
+     * The "Load more" button: more of the model's items from the site's API (api.leakgallery.com, the same
+     * "profile/NAME?type=All&sort=MostRecent&tag=0" request the page makes first). The name of the paging
+     * setting is not known yet, so the likely ones are tried and the first that brings new items is kept.
+     */
     private void loadMore(Set<String> urls, String token) {
-        for (int n = 2; n < 2000 && !isStopped(); n++) {
-            String api = SITE + "/api/profile/" + model() + "?type=All&sort=MostRecent&tag=0&page=" + n;
-            try {
-                sleep(600);
-                Http h = Http.url(api).referrer(url.toExternalForm()).ignoreContentType();
-                h.header("Accept", "application/json");
-                if (!token.isEmpty()) {
-                    h.header("Authorization", "Bearer " + token);
+        String base = API + "/profile/" + model() + "?type=All&sort=MostRecent&tag=0";
+        String style = null;
+        List<String> styles = new ArrayList<>(List.of("page", "p", "offset"));
+        int pageSize = Math.max(urls.size(), 1);
+        for (int n = 2; n < 3000 && !isStopped(); n++) {
+            int before = urls.size();
+            List<String> toTry = style == null ? styles : List.of(style);
+            boolean gotNew = false;
+            for (String st : toTry) {
+                String api = base + "&" + st + "=" + (st.equals("offset") ? (n - 1) * pageSize : n);
+                try {
+                    sleep(600);
+                    Http h = Http.url(api).referrer(SITE + "/").ignoreContentType();
+                    h.header("Accept", "application/json");
+                    h.header("Origin", SITE);
+                    if (!token.isEmpty()) {
+                        h.header("Authorization", "Bearer " + token);
+                    }
+                    JSONObject answer = h.getJSON();
+                    addMedias(answer.optJSONArray("medias"), urls);
+                    if (urls.size() > before) {
+                        style = st;
+                        gotNew = true;
+                        logger.info("More items come from " + api);
+                        break;
+                    }
+                } catch (IOException | JSONException e) {
+                    logger.info("Could not load more items from " + api + " (" + e.getMessage() + ")");
                 }
-                JSONObject answer = h.getJSON();
-                int before = urls.size();
-                addMedias(answer.optJSONArray("medias"), urls);
-                if (urls.size() == before) {
-                    return;
+            }
+            if (!gotNew) {
+                if (style == null) {
+                    logger.info("No way of loading more items worked; only the items on the page itself are ripped");
                 }
-            } catch (IOException | JSONException e) {
-                logger.info("Could not load more items from " + api + " (" + e.getMessage()
-                        + "); only the items on the page itself are ripped");
                 return;
             }
         }
