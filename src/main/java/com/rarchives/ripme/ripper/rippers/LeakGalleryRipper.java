@@ -41,7 +41,7 @@ public class LeakGalleryRipper extends AbstractHTMLRipper {
     private static final Logger logger = LogManager.getLogger(LeakGalleryRipper.class);
 
     private static final Pattern LINK = Pattern.compile(
-            "^https?://(?:www\\.)?leakgallery\\.com/([A-Za-z0-9._-]+)(?:/(\\d+))?/?(?:[?#].*)?$");
+            "^https?://(?:www\\.)?leakgallery\\.com/([A-Za-z0-9._-]+)(?:/(\\d+|Videos|Photos))?/?(?:[?#].*)?$");
     private static final Set<String> RESERVED = Set.of("2257", "about-leakgallery", "add-media", "comments", "contact",
             "creator-program", "creator-terms", "api", "assets", "icons", "search", "tags", "tag", "trending",
             "discover", "login", "signup", "terms", "privacy", "dmca", "models", "videos", "photos", "bookmarks");
@@ -84,11 +84,35 @@ public class LeakGalleryRipper extends AbstractHTMLRipper {
 
     private boolean isPost() {
         Matcher m = LINK.matcher(url.toExternalForm());
-        return m.matches() && m.group(2) != null;
+        return m.matches() && m.group(2) != null && Character.isDigit(m.group(2).charAt(0));
+    }
+
+    /** "All", "Videos" or "Photos", depending on the link. */
+    private String listType() {
+        Matcher m = LINK.matcher(url.toExternalForm());
+        if (m.matches() && m.group(2) != null && !Character.isDigit(m.group(2).charAt(0))) {
+            return m.group(2);
+        }
+        return "All";
     }
 
     @Override
     public Document getFirstPage() throws IOException {
+        if (!isPost() && !"All".equals(listType())) {
+            // Videos-only or Photos-only: open the model page for the token, then ask the API for page 1
+            Document modelPage = Http.url(SITE + "/" + model()).referrer(SITE + "/").get();
+            JSONObject st = pageState(modelPage);
+            if (st != null) {
+                token = st.optString("APP_TOKEN", "");
+                tokenTime = System.currentTimeMillis();
+            }
+            JSONObject first = fetchApiPage(1);
+            JSONArray medias = first.optJSONArray("medias");
+            logger.info("Ripping " + listType() + " only; first page has " + (medias == null ? 0 : medias.length()) + " items");
+            Document d = Jsoup.parse("<html><body></body></html>", API + "/profile/" + model() + "/1?type=" + listType());
+            d.body().attr("data-medias", medias == null ? "[]" : medias.toString());
+            return d;
+        }
         if (!isPost()) {
             return Http.url(url).referrer(SITE + "/").get();
         }
@@ -137,7 +161,7 @@ public class LeakGalleryRipper extends AbstractHTMLRipper {
     }
 
     private JSONObject fetchApiPage(int n) throws IOException {
-        String api = API + "/profile/" + model() + "/" + n + "?type=All&sort=MostRecent&tag=0";
+        String api = API + "/profile/" + model() + "/" + n + "?type=" + listType() + "&sort=MostRecent&tag=0";
         Http h = Http.url(api).referrer(SITE + "/" + model()).ignoreContentType();
         h.header("Accept", "application/json, text/plain, */*");
         h.header("Origin", SITE);
@@ -170,7 +194,7 @@ public class LeakGalleryRipper extends AbstractHTMLRipper {
         }
         pageNo = n;
         logger.info("Loaded page " + n + " (" + medias.length() + " items)");
-        Document next = Jsoup.parse("<html><body></body></html>", API + "/profile/" + model() + "/" + n);
+        Document next = Jsoup.parse("<html><body></body></html>", API + "/profile/" + model() + "/" + n + "?type=" + listType());
         next.body().attr("data-medias", medias.toString());
         return next;
     }
