@@ -17,6 +17,7 @@ import org.apache.logging.log4j.Logger;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
+import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 
@@ -31,8 +32,9 @@ import com.rarchives.ripme.utils.Http;
  * "file_path" such as content6/NAME/xyz.jpeg) and "httpGet:media/ID" holds one post. Files live on
  * https://cdn.leakgallery.com/ + file_path.
  *
- * Further items of a model are loaded by the "Load more" button from the site's API; that request is tried
- * below and logged, so its real address can be corrected from a log if the guess is wrong.
+ * Further items of a model are what the "Load more" button fetches: api.leakgallery.com/profile/NAME/2, /3 ...
+ * (40 items each, sent with the page's APP_TOKEN as an X-App-Token header; the token lasts about 15 minutes, so
+ * it is renewed while ripping). Each such answer is one "page" for the ripper, so downloads start right away.
  */
 public class LeakGalleryRipper extends AbstractHTMLRipper {
 
@@ -90,9 +92,60 @@ public class LeakGalleryRipper extends AbstractHTMLRipper {
         return Http.url(url).referrer(SITE + "/").get();
     }
 
+    private String token = "";
+    private long tokenTime = 0;
+    private int pageNo = 1;
+
+    /** The site's token lasts about 15 minutes; this asks the model page for a fresh one. */
+    private void refreshToken() {
+        try {
+            JSONObject state = pageState(Http.url(url).referrer(SITE + "/").get());
+            if (state != null && !state.optString("APP_TOKEN", "").isEmpty()) {
+                token = state.optString("APP_TOKEN");
+                tokenTime = System.currentTimeMillis();
+                logger.debug("Got a fresh site token");
+            }
+        } catch (IOException e) {
+            logger.warn("Could not refresh the site token: " + e.getMessage());
+        }
+    }
+
+    private JSONObject fetchApiPage(int n) throws IOException {
+        String api = API + "/profile/" + model() + "/" + n + "?type=All&sort=MostRecent&tag=0";
+        Http h = Http.url(api).referrer(SITE + "/" + model()).ignoreContentType();
+        h.header("Accept", "application/json, text/plain, */*");
+        h.header("Origin", SITE);
+        h.header("X-App-Token", token);
+        return h.getJSON();
+    }
+
+    /** Model pages: each further 40 items come from the API, one "page" at a time (the site's Load more). */
     @Override
     public Document getNextPage(Document doc) throws IOException {
-        throw new IOException("No more pages");
+        if (isPost()) {
+            throw new IOException("No more pages");
+        }
+        if (System.currentTimeMillis() - tokenTime > 8 * 60 * 1000L) {
+            refreshToken();
+        }
+        sleep(600);
+        int n = pageNo + 1;
+        JSONObject answer;
+        try {
+            answer = fetchApiPage(n);
+        } catch (IOException e) {
+            // most likely the token ran out: get a new one and try once more
+            refreshToken();
+            answer = fetchApiPage(n);
+        }
+        JSONArray medias = answer.optJSONArray("medias");
+        if (medias == null || medias.length() == 0) {
+            throw new IOException("No more pages");
+        }
+        pageNo = n;
+        Document next = Jsoup.parse("<html><body></body></html>");
+        next.body().attr("data-medias", medias.toString());
+        return next;
     }
 
     /** The JSON the page carries along (the ng-state script), or null. */
@@ -125,15 +178,26 @@ public class LeakGalleryRipper extends AbstractHTMLRipper {
     @Override
     public List<String> getURLsFromPage(Document page) {
         Set<String> urls = new LinkedHashSet<>();
+        if (page.body() != null && page.body().hasAttr("data-medias")) {
+            try {
+                addMedias(new JSONArray(page.body().attr("data-medias")), urls);
+            } catch (JSONException e) {
+                logger.warn("Unreadable page of items: " + e.getMessage());
+            }
+            return new ArrayList<>(urls);
+        }
         JSONObject state = pageState(page);
-        String token = state == null ? "" : state.optString("APP_TOKEN", "");
         if (state != null) {
+            if (!state.optString("APP_TOKEN", "").isEmpty()) {
+                token = state.optString("APP_TOKEN");
+                tokenTime = System.currentTimeMillis();
+            }
             for (String key : state.keySet()) {
                 if (key.startsWith("httpGet:profile/")) {
                     JSONObject profile = state.optJSONObject(key);
                     if (profile != null) {
                         addMedias(profile.optJSONArray("medias"), urls);
-                        logger.info("Model has " + profile.opt("mediaCount") + " items; the page carried " + urls.size());
+                        logger.info("Model has " + profile.opt("mediaCount") + " items; ripping them 40 at a time");
                     }
                 } else if (key.startsWith("httpGet:media/")) {
                     JSONObject media = state.optJSONObject(key);
@@ -167,9 +231,6 @@ public class LeakGalleryRipper extends AbstractHTMLRipper {
                 }
             }
         }
-        if (!isPost()) {
-            loadMore(urls, token);
-        }
         if (urls.isEmpty()) {
             logger.warn("No media found on " + url);
         }
@@ -177,51 +238,6 @@ public class LeakGalleryRipper extends AbstractHTMLRipper {
     }
 
     private static final String API = "https://api.leakgallery.com";
-
-    /**
-     * The "Load more" button: more of the model's items from the site's API (api.leakgallery.com, the same
-     * "profile/NAME?type=All&sort=MostRecent&tag=0" request the page makes first). The name of the paging
-     * setting is not known yet, so the likely ones are tried and the first that brings new items is kept.
-     */
-    private void loadMore(Set<String> urls, String token) {
-        String base = API + "/profile/" + model() + "?type=All&sort=MostRecent&tag=0";
-        String style = null;
-        List<String> styles = new ArrayList<>(List.of("page", "p", "offset"));
-        int pageSize = Math.max(urls.size(), 1);
-        for (int n = 2; n < 3000 && !isStopped(); n++) {
-            int before = urls.size();
-            List<String> toTry = style == null ? styles : List.of(style);
-            boolean gotNew = false;
-            for (String st : toTry) {
-                String api = base + "&" + st + "=" + (st.equals("offset") ? (n - 1) * pageSize : n);
-                try {
-                    sleep(600);
-                    Http h = Http.url(api).referrer(SITE + "/").ignoreContentType();
-                    h.header("Accept", "application/json");
-                    h.header("Origin", SITE);
-                    if (!token.isEmpty()) {
-                        h.header("Authorization", "Bearer " + token);
-                    }
-                    JSONObject answer = h.getJSON();
-                    addMedias(answer.optJSONArray("medias"), urls);
-                    if (urls.size() > before) {
-                        style = st;
-                        gotNew = true;
-                        logger.info("More items come from " + api);
-                        break;
-                    }
-                } catch (IOException | JSONException e) {
-                    logger.info("Could not load more items from " + api + " (" + e.getMessage() + ")");
-                }
-            }
-            if (!gotNew) {
-                if (style == null) {
-                    logger.info("No way of loading more items worked; only the items on the page itself are ripped");
-                }
-                return;
-            }
-        }
-    }
 
     @Override
     protected void downloadURL(URL url, int index) {
