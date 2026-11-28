@@ -89,7 +89,33 @@ public class LeakGalleryRipper extends AbstractHTMLRipper {
 
     @Override
     public Document getFirstPage() throws IOException {
-        return Http.url(url).referrer(SITE + "/").get();
+        if (!isPost()) {
+            return Http.url(url).referrer(SITE + "/").get();
+        }
+        try {
+            return Http.url(url).referrer(SITE + "/" + model()).get();
+        } catch (IOException e) {
+            // Post pages often answer 403 to RipMe, so ask the site's API for the item instead
+            logger.info("Post page refused (" + e.getMessage() + "); asking the API instead");
+        }
+        Matcher m = LINK.matcher(url.toExternalForm());
+        m.matches();
+        String id = m.group(2);
+        // the model page opens fine and carries the token the API wants
+        Document modelPage = Http.url(SITE + "/" + model()).referrer(SITE + "/").get();
+        JSONObject state = pageState(modelPage);
+        if (state != null) {
+            token = state.optString("APP_TOKEN", "");
+        }
+        Http h = Http.url(API + "/media/" + id).referrer(url.toExternalForm()).ignoreContentType();
+        h.header("Accept", "application/json, text/plain, */*");
+        h.header("Origin", SITE);
+        h.header("X-App-Token", token);
+        JSONObject media = h.getJSON();
+        logger.info("Got post " + id + " from the API");
+        Document d = Jsoup.parse("<html><body></body></html>", url.toExternalForm());
+        d.body().attr("data-media", media.toString());
+        return d;
     }
 
     private String token = "";
@@ -179,6 +205,16 @@ public class LeakGalleryRipper extends AbstractHTMLRipper {
     @Override
     public List<String> getURLsFromPage(Document page) {
         Set<String> urls = new LinkedHashSet<>();
+        if (page.body() != null && page.body().hasAttr("data-media")) {
+            try {
+                JSONArray one = new JSONArray();
+                one.put(new JSONObject(page.body().attr("data-media")));
+                addMedias(one, urls);
+            } catch (JSONException e) {
+                logger.warn("Unreadable post data: " + e.getMessage());
+            }
+            return new ArrayList<>(urls);
+        }
         if (page.body() != null && page.body().hasAttr("data-medias")) {
             try {
                 addMedias(new JSONArray(page.body().attr("data-medias")), urls);
